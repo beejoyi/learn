@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnswerBox, FeedbackPanel, FollowUpChat } from "@/components/QuizCoach";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Markdown } from "@/lib/markdown/Markdown";
 import type { MarkResult } from "@/progress/questions";
 import type { SessionView } from "@/progress/quiz";
+import type { AiChatMessage, AiFeedback, AiResult } from "@/progress/quizAi";
 import { cn } from "@/lib/utils";
 
 type Card = NonNullable<SessionView["current"]>;
@@ -15,6 +17,13 @@ export type QuizCardProps = {
   /** Records the mark and resolves with the session as it now stands. */
   onResult: (result: MarkResult) => Promise<SessionView>;
   onFinish: () => void;
+  /** The AI coach (OpenRouter); without it the card is a plain flashcard. */
+  coach?: QuizCoach;
+};
+
+export type QuizCoach = {
+  grade: (questionId: string, answer: string) => Promise<AiResult<AiFeedback>>;
+  ask: (questionId: string, history: AiChatMessage[], answer: string) => Promise<AiResult<string>>;
 };
 
 const KEYS: Record<string, MarkResult> = { g: "got", r: "review", s: "skip" };
@@ -31,16 +40,39 @@ function ignoresShortcut(e: KeyboardEvent): boolean {
 const activatesOnSpace = (target: EventTarget | null) =>
   target instanceof HTMLElement && Boolean(target.closest("button, a[href], summary, [role='button']"));
 
-export function QuizCard({ view, onResult, onFinish }: QuizCardProps) {
+const suggestedRing = "ring-2 ring-ring ring-offset-2 ring-offset-card";
+
+export function QuizCard({ view, onResult, onFinish, coach }: QuizCardProps) {
   if (view.done || !view.current) return <Done view={view} />;
   // A new card (or the same question coming back later) starts hidden and enabled.
-  return <Live key={`${view.position}:${view.current.id}`} view={view} card={view.current} onResult={onResult} onFinish={onFinish} />;
+  return <Live key={`${view.position}:${view.current.id}`} view={view} card={view.current} onResult={onResult} onFinish={onFinish} coach={coach} />;
 }
 
-function Live({ view, card, onResult, onFinish }: QuizCardProps & { card: Card }) {
+function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card: Card }) {
   const [revealed, setRevealed] = useState(false);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [answer, setAnswer] = useState("");
+  const [feedback, setFeedback] = useState<AiFeedback | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [coachError, setCoachError] = useState("");
+
+  async function check() {
+    if (!coach || checking || !answer.trim()) return;
+    setChecking(true);
+    setCoachError("");
+    try {
+      const result = await coach.grade(card.id, answer);
+      if (result.ok) {
+        setFeedback(result.value);
+        setRevealed(true);
+      } else setCoachError(result.error);
+    } catch {
+      setCoachError("The AI coach failed. Try again.");
+    } finally {
+      setChecking(false);
+    }
+  }
   // State updates are asynchronous; the ref is what stops a second key press in the same tick.
   const busy = useRef(false);
 
@@ -103,31 +135,72 @@ function Live({ view, card, onResult, onFinish }: QuizCardProps & { card: Card }
         </div>
       )}
 
-      <div aria-live="polite" className="mt-4">
+      {coach && !revealed && (
+        <div className="mt-4">
+          <AnswerBox value={answer} onChange={setAnswer} onCheck={() => void check()} pending={checking} />
+          {coachError && (
+            <p role="alert" className="mt-2 text-sm text-destructive">
+              {coachError}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div aria-live="polite" className="mt-4 grid gap-4">
+        {revealed && coach && answer.trim() && !feedback && (
+          <div className="rounded-lg border border-dashed border-border p-3 text-sm">
+            <p className="text-muted-foreground">Your answer</p>
+            <p className="mt-1 whitespace-pre-wrap">{answer}</p>
+          </div>
+        )}
+        {feedback && <FeedbackPanel feedback={feedback} />}
         {revealed ? (
           <div className="rounded-lg border border-border bg-background p-4">
+            {coach && <p className="mb-2 text-sm text-muted-foreground">Reference answer</p>}
             <Markdown source={card.answer} />
           </div>
         ) : (
-          <Button type="button" variant="outline" onClick={() => setRevealed(true)}>
-            Show answer
-            <kbd className="ml-1 rounded border border-border px-1 text-xs text-muted-foreground">Space</kbd>
-          </Button>
+          <div>
+            <Button type="button" variant="outline" disabled={checking} onClick={() => setRevealed(true)}>
+              Show answer
+              <kbd className="ml-1 rounded border border-border px-1 text-xs text-muted-foreground">Space</kbd>
+            </Button>
+          </div>
+        )}
+        {revealed && coach && (
+          <FollowUpChat opener={feedback?.followUp || undefined} ask={(history) => coach.ask(card.id, history, answer)} />
         )}
       </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" disabled={pending} onClick={() => void mark("got")} className="bg-ok text-background hover:bg-ok/85">
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() => void mark("got")}
+            aria-describedby={feedback?.suggested === "got" ? "quiz-suggested" : undefined}
+            className={cn("bg-ok text-background hover:bg-ok/85", feedback?.suggested === "got" && suggestedRing)}
+          >
             Got it
           </Button>
-          <Button type="button" disabled={pending} onClick={() => void mark("review")} className="bg-track-1 text-background hover:bg-track-1/85">
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() => void mark("review")}
+            aria-describedby={feedback?.suggested === "review" ? "quiz-suggested" : undefined}
+            className={cn("bg-track-1 text-background hover:bg-track-1/85", feedback?.suggested === "review" && suggestedRing)}
+          >
             Review
           </Button>
           <Button type="button" variant="outline" disabled={pending} onClick={() => void mark("skip")}>
             Skip
           </Button>
         </div>
+        {feedback && (
+          <span id="quiz-suggested" className="text-xs text-muted-foreground">
+            Coach suggests: {feedback.suggested === "got" ? "Got it" : "Review"}
+          </span>
+        )}
         {card.topic && (
           <Link
             href={`/graphs/${encodeURIComponent(card.topic.graphSlug)}?topic=${encodeURIComponent(card.topic.nodeSlug)}`}
@@ -145,7 +218,9 @@ function Live({ view, card, onResult, onFinish }: QuizCardProps & { card: Card }
       )}
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted-foreground">
-        <span>Keys: Space shows the answer, G got it, R review, S skip.</span>
+        <span>
+          Keys: Space shows the answer, G got it, R review, S skip{coach ? ", Ctrl+Enter checks your answer" : ""}.
+        </span>
         <Button type="button" variant="ghost" size="sm" onClick={onFinish}>
           End quiz
         </Button>

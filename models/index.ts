@@ -15,3 +15,4 @@ export { QuestionProgress } from "./questionProgress";
 export { QuizSession } from "./quizSession";
 export { NodeProgress } from "./nodeProgress";
 export { NoteProgress } from "./noteProgress";
+export { AiUsage } from "./aiUsage";

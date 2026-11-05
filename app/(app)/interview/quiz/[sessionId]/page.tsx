@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { QuizRunner } from "@/components/QuizRunner";
 import { requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
+import { aiEnabled } from "@/lib/openrouter";
 import { buildMetadata } from "@/lib/seo";
 import { getSessionView } from "@/progress/quiz";
 
@@ -28,7 +29,7 @@ export default async function QuizPage({
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <QuizRunner initial={view} />
+      <QuizRunner initial={view} aiEnabled={aiEnabled()} />
     </div>
   );
 }

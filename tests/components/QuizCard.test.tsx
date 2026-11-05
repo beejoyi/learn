@@ -2,7 +2,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { QuizCard } from "@/components/QuizCard";
+import { type QuizCoach, QuizCard } from "@/components/QuizCard";
 import type { SessionView } from "@/progress/quiz";
 
 const card = {
@@ -135,5 +135,98 @@ describe("QuizCard", () => {
     expect(screen.getByText("1").nextSibling?.textContent).toBe("Skipped");
     expect(screen.getByRole("link", { name: "Back to Interview" }).getAttribute("href")).toBe("/interview");
     expect(screen.queryByRole("button", { name: "Got it" })).toBeNull();
+  });
+
+  describe("with the AI coach", () => {
+    const feedback = {
+      verdict: "partial" as const,
+      score: 60,
+      summary: "Right idea, thin on detail.",
+      strengths: ["Mentions scope"],
+      missing: ["Lexical environment"],
+      followUp: "Values or variables?",
+      suggested: "review" as const,
+    };
+
+    function withCoach(over: Partial<QuizCoach> = {}) {
+      const coach: QuizCoach = {
+        grade: vi.fn(async () => ({ ok: true as const, value: feedback })),
+        ask: vi.fn(async () => ({ ok: true as const, value: "Variables." })),
+        ...over,
+      };
+      const onResult = vi.fn(() => Promise.resolve(view({ position: 4 })));
+      render(<QuizCard view={view()} onResult={onResult} onFinish={vi.fn()} coach={coach} />);
+      return { coach, onResult, user: userEvent.setup() };
+    }
+
+    it("has no answer box without a coach", () => {
+      setup();
+      expect(screen.queryByLabelText("Your answer")).toBeNull();
+    });
+
+    it("grades the typed answer, then shows feedback, the reference answer and the suggestion", async () => {
+      const { coach, user } = withCoach();
+      expect((screen.getByRole("button", { name: /check with ai/i }) as HTMLButtonElement).disabled).toBe(true);
+      await user.type(screen.getByLabelText("Your answer"), "Keeps scope g r s ");
+      await user.click(screen.getByRole("button", { name: /check with ai/i }));
+      expect(coach.grade).toHaveBeenCalledWith("q1", "Keeps scope g r s ");
+      expect(await screen.findByText("Partly right")).toBeTruthy();
+      expect(screen.getByText("60 / 100")).toBeTruthy();
+      expect(screen.getByText("Lexical environment")).toBeTruthy();
+      expect(screen.getByText(ANSWER)).toBeTruthy();
+      expect(screen.getByText("Coach suggests: Review")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Review" }).getAttribute("aria-describedby")).toBe("quiz-suggested");
+      // The follow-up chat opens with the coach's question.
+      expect(screen.getByText("Values or variables?")).toBeTruthy();
+    });
+
+    it("does not treat typing in the answer box as shortcuts", async () => {
+      const { onResult, user } = withCoach();
+      await user.type(screen.getByLabelText("Your answer"), "g s r  ");
+      expect(onResult).not.toHaveBeenCalled();
+      expect(screen.queryByText(ANSWER)).toBeNull();
+    });
+
+    it("checks with Ctrl+Enter", async () => {
+      const { coach, user } = withCoach();
+      await user.type(screen.getByLabelText("Your answer"), "Keeps scope");
+      await user.keyboard("{Control>}{Enter}{/Control}");
+      expect(coach.grade).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows a coach error and keeps the answer hidden", async () => {
+      const { user } = withCoach({ grade: vi.fn(async () => ({ ok: false as const, error: "Limit reached." })) });
+      await user.type(screen.getByLabelText("Your answer"), "x");
+      await user.click(screen.getByRole("button", { name: /check with ai/i }));
+      expect((await screen.findByRole("alert")).textContent).toBe("Limit reached.");
+      expect(screen.queryByText(ANSWER)).toBeNull();
+    });
+
+    it("sends follow-ups with the conversation so far and shows the reply", async () => {
+      const { coach, user } = withCoach();
+      await user.type(screen.getByLabelText("Your answer"), "Keeps scope");
+      await user.click(screen.getByRole("button", { name: /check with ai/i }));
+      await user.type(await screen.findByLabelText("Message the AI coach"), "Values?");
+      await user.click(screen.getByRole("button", { name: "Send" }));
+      expect(coach.ask).toHaveBeenCalledWith(
+        "q1",
+        [
+          { role: "assistant", content: "Values or variables?" },
+          { role: "user", content: "Values?" },
+        ],
+        "Keeps scope",
+      );
+      expect(await screen.findByText("Variables.")).toBeTruthy();
+    });
+
+    it("offers a follow-up after revealing without grading, and restores the draft on error", async () => {
+      const { user } = withCoach({ ask: vi.fn(async () => ({ ok: false as const, error: "Busy." })) });
+      await user.click(screen.getByRole("button", { name: /show answer/i }));
+      await user.click(screen.getByRole("button", { name: /ask the ai coach/i }));
+      await user.type(screen.getByLabelText("Message the AI coach"), "Why?");
+      await user.click(screen.getByRole("button", { name: "Send" }));
+      expect((await screen.findByRole("alert")).textContent).toBe("Busy.");
+      expect((screen.getByLabelText("Message the AI coach") as HTMLTextAreaElement).value).toBe("Why?");
+    });
   });
 });

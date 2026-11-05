@@ -2,9 +2,18 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { AI_ANSWER_MAX, AI_HISTORY_MAX, AI_MESSAGE_MAX } from "@/lib/ai-limits";
 import { requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
+import { AiError, aiEnabled } from "@/lib/openrouter";
 import type { MarkResult } from "@/progress/questions";
+import {
+  type AiChatMessage,
+  type AiFeedback,
+  type AiResult,
+  askFollowUp,
+  gradeAnswer,
+} from "@/progress/quizAi";
 import {
   createSession,
   finishSession,
@@ -66,4 +75,53 @@ export async function finishQuizAction(sessionId: string): Promise<void> {
   const user = await requireUser();
   await connectDb();
   await finishSession(user.userId, id);
+}
+
+/** Runs an AI call, turning failures into a message (thrown errors are masked in production). */
+async function aiCall<T>(work: (userId: string) => Promise<T>): Promise<AiResult<T>> {
+  const user = await requireUser();
+  if (!aiEnabled()) return { ok: false, error: "The AI coach is not configured." };
+  try {
+    await connectDb();
+    return { ok: true, value: await work(user.userId) };
+  } catch (error) {
+    if (error instanceof AiError) return { ok: false, error: error.message };
+    console.error("AI coach failed", error);
+    return { ok: false, error: "The AI coach failed. Try again." };
+  }
+}
+
+export async function gradeAnswerAction(
+  sessionId: string,
+  questionId: string,
+  answer: string,
+): Promise<AiResult<AiFeedback>> {
+  const input = z
+    .object({ sessionId: objectId, questionId: objectId, answer: z.string().trim().min(1).max(AI_ANSWER_MAX) })
+    .safeParse({ sessionId, questionId, answer });
+  if (!input.success) return { ok: false, error: `Type an answer of up to ${AI_ANSWER_MAX} characters.` };
+  const { data } = input;
+  return aiCall((userId) => gradeAnswer(userId, data.sessionId, data.questionId, data.answer));
+}
+
+export async function askFollowUpAction(
+  sessionId: string,
+  questionId: string,
+  history: AiChatMessage[],
+  answer = "",
+): Promise<AiResult<string>> {
+  const input = z
+    .object({
+      sessionId: objectId,
+      questionId: objectId,
+      history: z
+        .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(AI_MESSAGE_MAX) }))
+        .min(1)
+        .max(AI_HISTORY_MAX),
+      answer: z.string().max(AI_ANSWER_MAX),
+    })
+    .safeParse({ sessionId, questionId, history, answer });
+  if (!input.success) return { ok: false, error: `Keep messages under ${AI_MESSAGE_MAX} characters.` };
+  const { data } = input;
+  return aiCall((userId) => askFollowUp(userId, data.sessionId, data.questionId, data.history, data.answer));
 }

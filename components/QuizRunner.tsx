@@ -1,13 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { finishQuizAction, recordResultAction } from "@/app/(app)/interview/actions";
-import { QuizCard } from "@/components/QuizCard";
+import {
+  askFollowUpAction,
+  finishQuizAction,
+  gradeAnswerAction,
+  recordResultAction,
+} from "@/app/(app)/interview/actions";
+import { type QuizCoach, QuizCard } from "@/components/QuizCard";
 import type { MarkResult } from "@/progress/questions";
 import type { SessionView } from "@/progress/quiz";
 
 /** Connects a quiz session to the Server Actions; the card itself only knows callbacks. */
-export function QuizRunner({ initial }: { initial: SessionView }) {
+export function QuizRunner({ initial, aiEnabled = false }: { initial: SessionView; aiEnabled?: boolean }) {
   const [view, setView] = useState(initial);
   const [, startTransition] = useTransition();
 
@@ -25,5 +30,12 @@ export function QuizRunner({ initial }: { initial: SessionView }) {
     });
   }
 
-  return <QuizCard view={view} onResult={onResult} onFinish={onFinish} />;
+  const coach: QuizCoach | undefined = aiEnabled
+    ? {
+        grade: (questionId, answer) => gradeAnswerAction(view.sessionId, questionId, answer),
+        ask: (questionId, history, answer) => askFollowUpAction(view.sessionId, questionId, history, answer),
+      }
+    : undefined;
+
+  return <QuizCard view={view} onResult={onResult} onFinish={onFinish} coach={coach} />;
 }

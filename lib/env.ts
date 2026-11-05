@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini";
+
 const schema = z.object({
   MONGODB_URI: z.string().min(1),
   AUTH_SECRET: z.string().default(""),
@@ -18,6 +20,21 @@ const schema = z.object({
     .string()
     .default("false")
     .transform((value) => ["true", "1"].includes(value.trim().toLowerCase())),
+  /** OpenRouter key for the AI quiz coach; blank turns the coach off. */
+  OPENROUTER_API_KEY: z
+    .string()
+    .default("")
+    .transform((value) => value.trim()),
+  OPENROUTER_MODEL: z
+    .string()
+    .default("")
+    .transform((value) => value.trim() || DEFAULT_OPENROUTER_MODEL),
+  /** AI calls (grades and follow-ups) per user per UTC day; 0 means no limit. */
+  OPENROUTER_DAILY_LIMIT: z
+    .string()
+    .default("")
+    .transform((value) => Number(value.trim() || "100"))
+    .pipe(z.number().int().min(0)),
 });
 
 export type Env = z.output<typeof schema>;

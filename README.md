@@ -22,6 +22,24 @@ npx vitest run
 Tests start their own in-memory MongoDB replica set (`mongodb-memory-server`),
 so Docker is not needed. The first run downloads a `mongod` binary.
 
+## AI quiz coach (OpenRouter)
+
+Set `OPENROUTER_API_KEY` (from <https://openrouter.ai/keys>) to turn on the AI coach
+in quizzes. Learners can then type their answer and **Check with AI** (Ctrl/Cmd+Enter)
+to get a verdict, a score, what they got right and missed, and a suggested
+Got it / Review mark. After the answer is shown, they can carry on a short
+**follow-up** chat with the coach about the card. Marking stays with the learner,
+and the keyboard shortcuts work as before. With no key the quiz is the plain
+flashcard flow.
+
+- `OPENROUTER_MODEL`: any OpenRouter model id (default `openai/gpt-4o-mini`).
+- `OPENROUTER_DAILY_LIMIT`: AI calls per user per UTC day, counting grades and
+  follow-ups (default 100; `0` means no limit). Counters live in `aiusages` and
+  expire on their own.
+
+Only the card's question, context and reference answer plus the learner's own text
+are sent, and only for a visible question in the learner's own session.
+
 ## Deploy (Vercel + MongoDB Atlas)
 
 1. **Database.** Create a MongoDB Atlas cluster (the free tier works), a database
@@ -33,7 +51,8 @@ so Docker is not needed. The first run downloads a `mongod` binary.
    - `https://<your-vercel-domain>/api/auth/callback/google`
 3. **Vercel.** Import the repo with **Root Directory** `web`, and set these
    environment variables: `MONGODB_URI`, `AUTH_SECRET` (`npx auth secret`),
-   `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `ADMIN_EMAILS` (your Google email).
+   `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `ADMIN_EMAILS` (your Google email),
+   and optionally `OPENROUTER_API_KEY` for the AI quiz coach.
    Leave `AUTH_DEV_LOGIN` unset. Outside Vercel, also set `AUTH_TRUST_HOST=true`
    or `AUTH_URL`.
 4. **Content.** The legacy files were imported into the local database and removed.

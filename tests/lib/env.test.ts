@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getEnv, resetEnvCache } from "@/lib/env";
+import { DEFAULT_OPENROUTER_MODEL, getEnv, resetEnvCache } from "@/lib/env";
 
 const KEYS = [
   "MONGODB_URI",
@@ -8,6 +8,9 @@ const KEYS = [
   "AUTH_GOOGLE_SECRET",
   "ADMIN_EMAILS",
   "AUTH_DEV_LOGIN",
+  "OPENROUTER_API_KEY",
+  "OPENROUTER_MODEL",
+  "OPENROUTER_DAILY_LIMIT",
 ] as const;
 
 describe("getEnv", () => {
@@ -44,6 +47,22 @@ describe("getEnv", () => {
   it("throws an error naming MONGODB_URI when it is missing", () => {
     delete process.env.MONGODB_URI;
     expect(() => getEnv()).toThrow(/MONGODB_URI/);
+  });
+
+  it("defaults the OpenRouter settings: no key, the default model, 100 calls a day", () => {
+    expect(getEnv()).toMatchObject({
+      OPENROUTER_API_KEY: "",
+      OPENROUTER_MODEL: DEFAULT_OPENROUTER_MODEL,
+      OPENROUTER_DAILY_LIMIT: 100,
+    });
+  });
+
+  it("parses OPENROUTER_DAILY_LIMIT and rejects a non-number", () => {
+    process.env.OPENROUTER_DAILY_LIMIT = "0";
+    expect(getEnv().OPENROUTER_DAILY_LIMIT).toBe(0);
+    resetEnvCache();
+    process.env.OPENROUTER_DAILY_LIMIT = "lots";
+    expect(() => getEnv()).toThrow(/OPENROUTER_DAILY_LIMIT/);
   });
 
   it("defaults AUTH_DEV_LOGIN to false", () => {
