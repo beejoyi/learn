@@ -24,21 +24,32 @@ so Docker is not needed. The first run downloads a `mongod` binary.
 
 ## AI quiz coach (OpenRouter)
 
-Set `OPENROUTER_API_KEY` (from <https://openrouter.ai/keys>) to turn on the AI coach
-in quizzes. Learners can then type their answer and **Check with AI** (Ctrl/Cmd+Enter)
-to get a verdict, a score, what they got right and missed, and a suggested
-Got it / Review mark. After the answer is shown, they can carry on a short
-**follow-up** chat with the coach about the card. Marking stays with the learner,
-and the keyboard shortcuts work as before. With no key the quiz is the plain
-flashcard flow.
+Set `OPENROUTER_API_KEY` (from <https://openrouter.ai/keys>; a free key works with
+free models) to make the AI coach available in quizzes. Learners can then type their
+answer and **Check with AI** (Ctrl/Cmd+Enter) to get a verdict, a score, what they got
+right and missed, and a suggested Got it / Review mark. After the answer is shown,
+they can carry on a short **follow-up** chat with the coach about the card. Marking
+stays with the learner, and the keyboard shortcuts work as before.
 
-- `OPENROUTER_MODEL`: any OpenRouter model id (default `openai/gpt-4o-mini`).
-- `OPENROUTER_DAILY_LIMIT`: AI calls per user per UTC day, counting grades and
-  follow-ups (default 100; `0` means no limit). Counters live in `aiusages` and
-  expire on their own.
+Manage it in **Admin → AI coach**:
+
+- turn the coach on or off;
+- pick the **primary** and **backup** models from OpenRouter's live catalogue (free
+  models are listed by default, paid ones on request, and any model id can be
+  typed). The backup is tried whenever the primary fails, is rate-limited or gives
+  an unreadable reply, which is common with free models;
+- set the AI calls per learner per UTC day (checks and follow-ups both count, and
+  failed calls are refunded; `0` means no limit);
+- **Test models** sends a one-word prompt to each model and shows which ones answer.
+
+Until an admin saves settings, `OPENROUTER_MODEL` (default `openai/gpt-4o-mini`) and
+`OPENROUTER_DAILY_LIMIT` (default 100) apply. The key itself only lives in the
+environment.
 
 Only the card's question, context and reference answer plus the learner's own text
-are sent, and only for a visible question in the learner's own session.
+are sent, and only for a visible question in the learner's own session. Follow-up
+history is kept on the server (`aiconversations`, removed a week after the last
+message), so the model only sees replies it actually wrote.
 
 ## Deploy (Vercel + MongoDB Atlas)
 

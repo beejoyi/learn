@@ -20,6 +20,7 @@ const NAV: AdminNavGroup[] = [
       { href: "/admin/export", label: "Export" },
       { href: "/admin/tokens", label: "API tokens" },
       { href: "/admin/users", label: "Users" },
+      { href: "/admin/ai", label: "AI coach" },
     ],
   },
 ];

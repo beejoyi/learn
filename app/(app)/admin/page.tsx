@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connectDb } from "@/lib/db";
 import { getEnv } from "@/lib/env";
+import { getAiSettings } from "@/lib/aiSettings";
 import {
   Graph,
   GraphNode,
@@ -20,7 +21,7 @@ export const metadata = buildMetadata({
 
 export default async function AdminHome() {
   await connectDb();
-  const [books, questions, graphs, topics, series, notes, users, pendingUsers] =
+  const [books, questions, graphs, topics, series, notes, users, pendingUsers, ai] =
     await Promise.all([
       QuestionBook.countDocuments(),
       Question.countDocuments(),
@@ -31,6 +32,7 @@ export default async function AdminHome() {
       User.countDocuments(),
       // Admins are always approved whatever their stored status, as on the users page.
       User.countDocuments({ status: "pending", email: { $nin: getEnv().ADMIN_EMAILS } }),
+      getAiSettings(),
     ]);
   const rows = [
     {
@@ -52,6 +54,15 @@ export default async function AdminHome() {
       href: pendingUsers > 0 ? "/admin/users?status=pending" : "/admin/users",
       label: "Users",
       detail: `${users} signed up${pendingUsers > 0 ? ` · ${pendingUsers} waiting for review` : ""}`,
+    },
+    {
+      href: "/admin/ai",
+      label: "AI coach",
+      detail: !ai.keyConfigured
+        ? "Off · no OpenRouter key"
+        : ai.enabled
+          ? `On · ${ai.primaryModel}${ai.fallbackModel ? ` (backup ${ai.fallbackModel})` : ""}`
+          : "Turned off",
     },
   ];
 

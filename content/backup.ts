@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import mongoose, { type Model } from "mongoose";
 import {
+  AiSettings,
   ApiToken,
   Graph,
   GraphNode,
@@ -63,6 +64,7 @@ export const ALL_COLLECTIONS: [name: string, model: Model<unknown>][] = [
   ["noteprogresses", NoteProgress],
   ["revisions", Revision],
   ["apitokens", ApiToken],
+  ["aisettings", AiSettings],
 ];
 
 const countsOf = async (collections: typeof ALL_COLLECTIONS) =>

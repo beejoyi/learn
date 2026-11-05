@@ -33,7 +33,7 @@ export function QuizRunner({ initial, aiEnabled = false }: { initial: SessionVie
   const coach: QuizCoach | undefined = aiEnabled
     ? {
         grade: (questionId, answer) => gradeAnswerAction(view.sessionId, questionId, answer),
-        ask: (questionId, history, answer) => askFollowUpAction(view.sessionId, questionId, history, answer),
+        ask: (questionId, input) => askFollowUpAction(view.sessionId, questionId, input),
       }
     : undefined;
 

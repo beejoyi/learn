@@ -2,18 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { AI_ANSWER_MAX, AI_HISTORY_MAX, AI_MESSAGE_MAX } from "@/lib/ai-limits";
+import { AI_ANSWER_MAX, AI_MESSAGE_MAX } from "@/lib/ai-limits";
 import { requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
-import { AiError, aiEnabled } from "@/lib/openrouter";
+import { AiError } from "@/lib/openrouter";
 import type { MarkResult } from "@/progress/questions";
-import {
-  type AiChatMessage,
-  type AiFeedback,
-  type AiResult,
-  askFollowUp,
-  gradeAnswer,
-} from "@/progress/quizAi";
+import { type AiGrade, type AiReply, type AiResult, askFollowUp, gradeAnswer } from "@/progress/quizAi";
 import {
   createSession,
   finishSession,
@@ -80,7 +74,6 @@ export async function finishQuizAction(sessionId: string): Promise<void> {
 /** Runs an AI call, turning failures into a message (thrown errors are masked in production). */
 async function aiCall<T>(work: (userId: string) => Promise<T>): Promise<AiResult<T>> {
   const user = await requireUser();
-  if (!aiEnabled()) return { ok: false, error: "The AI coach is not configured." };
   try {
     await connectDb();
     return { ok: true, value: await work(user.userId) };
@@ -91,15 +84,28 @@ async function aiCall<T>(work: (userId: string) => Promise<T>): Promise<AiResult
   }
 }
 
+/** The message for the first invalid field, so the learner fixes the right thing. */
+function inputError(error: z.ZodError, messages: Record<string, string>): string {
+  const field = String(error.issues[0]?.path[0] ?? "");
+  return messages[field] ?? "This quiz is out of date. Reload the page and try again.";
+}
+
 export async function gradeAnswerAction(
   sessionId: string,
   questionId: string,
   answer: string,
-): Promise<AiResult<AiFeedback>> {
+): Promise<AiResult<AiGrade>> {
   const input = z
     .object({ sessionId: objectId, questionId: objectId, answer: z.string().trim().min(1).max(AI_ANSWER_MAX) })
     .safeParse({ sessionId, questionId, answer });
-  if (!input.success) return { ok: false, error: `Type an answer of up to ${AI_ANSWER_MAX} characters.` };
+  if (!input.success) {
+    return {
+      ok: false,
+      error: inputError(input.error, {
+        answer: answer?.trim() ? `Keep your answer under ${AI_ANSWER_MAX} characters.` : "Type an answer first.",
+      }),
+    };
+  }
   const { data } = input;
   return aiCall((userId) => gradeAnswer(userId, data.sessionId, data.questionId, data.answer));
 }
@@ -107,21 +113,27 @@ export async function gradeAnswerAction(
 export async function askFollowUpAction(
   sessionId: string,
   questionId: string,
-  history: AiChatMessage[],
-  answer = "",
-): Promise<AiResult<string>> {
+  followUp: { conversationId?: string; message: string; answer?: string },
+): Promise<AiResult<AiReply>> {
   const input = z
     .object({
       sessionId: objectId,
       questionId: objectId,
-      history: z
-        .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(AI_MESSAGE_MAX) }))
-        .min(1)
-        .max(AI_HISTORY_MAX),
-      answer: z.string().max(AI_ANSWER_MAX),
+      conversationId: objectId.optional(),
+      message: z.string().trim().min(1).max(AI_MESSAGE_MAX),
+      answer: z.string().max(AI_ANSWER_MAX).optional(),
     })
-    .safeParse({ sessionId, questionId, history, answer });
-  if (!input.success) return { ok: false, error: `Keep messages under ${AI_MESSAGE_MAX} characters.` };
-  const { data } = input;
-  return aiCall((userId) => askFollowUp(userId, data.sessionId, data.questionId, data.history, data.answer));
+    .safeParse({ sessionId, questionId, ...followUp });
+  if (!input.success) {
+    return {
+      ok: false,
+      error: inputError(input.error, {
+        message: followUp?.message?.trim() ? `Keep messages under ${AI_MESSAGE_MAX} characters.` : "Type a message first.",
+        answer: `Keep your answer under ${AI_ANSWER_MAX} characters.`,
+        conversationId: "This conversation has expired. Reload the page to start a new one.",
+      }),
+    };
+  }
+  const { sessionId: sid, questionId: qid, ...rest } = input.data;
+  return aiCall((userId) => askFollowUp(userId, sid, qid, rest));
 }

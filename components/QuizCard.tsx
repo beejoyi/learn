@@ -7,7 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Markdown } from "@/lib/markdown/Markdown";
 import type { MarkResult } from "@/progress/questions";
 import type { SessionView } from "@/progress/quiz";
-import type { AiChatMessage, AiFeedback, AiResult } from "@/progress/quizAi";
+import type { AiGrade, AiReply, AiResult } from "@/progress/quizAi";
 import { cn } from "@/lib/utils";
 
 type Card = NonNullable<SessionView["current"]>;
@@ -22,8 +22,11 @@ export type QuizCardProps = {
 };
 
 export type QuizCoach = {
-  grade: (questionId: string, answer: string) => Promise<AiResult<AiFeedback>>;
-  ask: (questionId: string, history: AiChatMessage[], answer: string) => Promise<AiResult<string>>;
+  grade: (questionId: string, answer: string) => Promise<AiResult<AiGrade>>;
+  ask: (
+    questionId: string,
+    input: { conversationId?: string; message: string; answer?: string },
+  ) => Promise<AiResult<AiReply>>;
 };
 
 const KEYS: Record<string, MarkResult> = { g: "got", r: "review", s: "skip" };
@@ -53,23 +56,28 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [answer, setAnswer] = useState("");
-  const [feedback, setFeedback] = useState<AiFeedback | null>(null);
+  const [grade, setGrade] = useState<AiGrade | null>(null);
   const [checking, setChecking] = useState(false);
   const [coachError, setCoachError] = useState("");
+  // Like `busy`: blocks a second check, and every shortcut, while a check is in flight.
+  const checkingRef = useRef(false);
+  const feedback = grade?.feedback ?? null;
 
   async function check() {
-    if (!coach || checking || !answer.trim()) return;
+    if (!coach || checkingRef.current || !answer.trim()) return;
+    checkingRef.current = true;
     setChecking(true);
     setCoachError("");
     try {
       const result = await coach.grade(card.id, answer);
       if (result.ok) {
-        setFeedback(result.value);
+        setGrade(result.value);
         setRevealed(true);
       } else setCoachError(result.error);
     } catch {
       setCoachError("The AI coach failed. Try again.");
     } finally {
+      checkingRef.current = false;
       setChecking(false);
     }
   }
@@ -78,7 +86,7 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
 
   const mark = useCallback(
     async (result: MarkResult) => {
-      if (busy.current) return;
+      if (busy.current || checkingRef.current) return;
       busy.current = true;
       setPending(true);
       setFailed(false);
@@ -96,7 +104,7 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (ignoresShortcut(e)) return;
+      if (ignoresShortcut(e) || checkingRef.current) return;
       if (e.key === " ") {
         if (activatesOnSpace(e.target)) return;
         e.preventDefault();
@@ -153,7 +161,7 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
             <p className="mt-1 whitespace-pre-wrap">{answer}</p>
           </div>
         )}
-        {feedback && <FeedbackPanel feedback={feedback} />}
+        {grade && <FeedbackPanel feedback={grade.feedback} model={grade.model} />}
         {revealed ? (
           <div className="rounded-lg border border-border bg-background p-4">
             {coach && <p className="mb-2 text-sm text-muted-foreground">Reference answer</p>}
@@ -168,7 +176,13 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
           </div>
         )}
         {revealed && coach && (
-          <FollowUpChat opener={feedback?.followUp || undefined} ask={(history) => coach.ask(card.id, history, answer)} />
+          <FollowUpChat
+            // A new conversation (a grade) starts a fresh chat; the opener is only read on mount.
+            key={grade?.conversationId ?? "ungraded"}
+            opener={feedback?.followUp || undefined}
+            conversationId={grade?.conversationId}
+            ask={(input) => coach.ask(card.id, { ...input, answer })}
+          />
         )}
       </div>
 
@@ -176,7 +190,7 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
-            disabled={pending}
+            disabled={pending || checking}
             onClick={() => void mark("got")}
             aria-describedby={feedback?.suggested === "got" ? "quiz-suggested" : undefined}
             className={cn("bg-ok text-background hover:bg-ok/85", feedback?.suggested === "got" && suggestedRing)}
@@ -185,14 +199,14 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
           </Button>
           <Button
             type="button"
-            disabled={pending}
+            disabled={pending || checking}
             onClick={() => void mark("review")}
             aria-describedby={feedback?.suggested === "review" ? "quiz-suggested" : undefined}
             className={cn("bg-track-1 text-background hover:bg-track-1/85", feedback?.suggested === "review" && suggestedRing)}
           >
             Review
           </Button>
-          <Button type="button" variant="outline" disabled={pending} onClick={() => void mark("skip")}>
+          <Button type="button" variant="outline" disabled={pending || checking} onClick={() => void mark("skip")}>
             Skip
           </Button>
         </div>

@@ -57,12 +57,14 @@ describe("getEnv", () => {
     });
   });
 
-  it("parses OPENROUTER_DAILY_LIMIT and rejects a non-number", () => {
+  it("parses OPENROUTER_DAILY_LIMIT and falls back to 100 instead of failing on a bad value", () => {
     process.env.OPENROUTER_DAILY_LIMIT = "0";
     expect(getEnv().OPENROUTER_DAILY_LIMIT).toBe(0);
-    resetEnvCache();
-    process.env.OPENROUTER_DAILY_LIMIT = "lots";
-    expect(() => getEnv()).toThrow(/OPENROUTER_DAILY_LIMIT/);
+    for (const bad of ["unlimited", "-1", "2.5"]) {
+      resetEnvCache();
+      process.env.OPENROUTER_DAILY_LIMIT = bad;
+      expect(getEnv().OPENROUTER_DAILY_LIMIT).toBe(100);
+    }
   });
 
   it("defaults AUTH_DEV_LOGIN to false", () => {

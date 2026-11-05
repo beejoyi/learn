@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { QuizRunner } from "@/components/QuizRunner";
 import { requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
-import { aiEnabled } from "@/lib/openrouter";
+import { getAiSettings } from "@/lib/aiSettings";
 import { buildMetadata } from "@/lib/seo";
 import { getSessionView } from "@/progress/quiz";
 
@@ -24,12 +24,12 @@ export default async function QuizPage({
   const { sessionId } = await params;
   const user = await requireUser();
   await connectDb();
-  const view = await getSessionView(user.userId, sessionId);
+  const [view, ai] = await Promise.all([getSessionView(user.userId, sessionId), getAiSettings()]);
   if (!view) notFound();
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <QuizRunner initial={view} aiEnabled={aiEnabled()} />
+      <QuizRunner initial={view} aiEnabled={ai.active} />
     </div>
   );
 }

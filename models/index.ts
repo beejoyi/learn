@@ -16,3 +16,5 @@ export { QuizSession } from "./quizSession";
 export { NodeProgress } from "./nodeProgress";
 export { NoteProgress } from "./noteProgress";
 export { AiUsage } from "./aiUsage";
+export { AiSettings } from "./aiSettings";
+export { AiConversation } from "./aiConversation";

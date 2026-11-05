@@ -147,11 +147,12 @@ describe("QuizCard", () => {
       followUp: "Values or variables?",
       suggested: "review" as const,
     };
+    const graded = { ok: true as const, value: { feedback, conversationId: "c1", model: "m/free" } };
 
     function withCoach(over: Partial<QuizCoach> = {}) {
       const coach: QuizCoach = {
-        grade: vi.fn(async () => ({ ok: true as const, value: feedback })),
-        ask: vi.fn(async () => ({ ok: true as const, value: "Variables." })),
+        grade: vi.fn(async () => graded),
+        ask: vi.fn(async () => ({ ok: true as const, value: { reply: "Variables.", conversationId: "c1", model: "m/free" } })),
         ...over,
       };
       const onResult = vi.fn(() => Promise.resolve(view({ position: 4 })));
@@ -173,6 +174,7 @@ describe("QuizCard", () => {
       expect(await screen.findByText("Partly right")).toBeTruthy();
       expect(screen.getByText("60 / 100")).toBeTruthy();
       expect(screen.getByText("Lexical environment")).toBeTruthy();
+      expect(screen.getByText("Checked by m/free")).toBeTruthy();
       expect(screen.getByText(ANSWER)).toBeTruthy();
       expect(screen.getByText("Coach suggests: Review")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Review" }).getAttribute("aria-describedby")).toBe("quiz-suggested");
@@ -187,11 +189,25 @@ describe("QuizCard", () => {
       expect(screen.queryByText(ANSWER)).toBeNull();
     });
 
-    it("checks with Ctrl+Enter", async () => {
-      const { coach, user } = withCoach();
+    it("sends one check for a double Ctrl+Enter and ignores shortcuts while checking", async () => {
+      let resolve!: (v: typeof graded) => void;
+      const grade = vi.fn(() => new Promise<typeof graded>((r) => (resolve = r)));
+      const { onResult, user } = withCoach({ grade });
       await user.type(screen.getByLabelText("Your answer"), "Keeps scope");
-      await user.keyboard("{Control>}{Enter}{/Control}");
-      expect(coach.grade).toHaveBeenCalledTimes(1);
+      await user.keyboard("{Control>}{Enter}{Enter}{/Control}");
+      expect(grade).toHaveBeenCalledTimes(1);
+      // Focus stays in the (read-only) box; even from <body>, Space and G must do nothing mid-check.
+      expect(document.activeElement).toBe(screen.getByLabelText("Your answer"));
+      (document.activeElement as HTMLElement).blur();
+      await user.keyboard(" g");
+      expect(screen.queryByText(ANSWER)).toBeNull();
+      expect(onResult).not.toHaveBeenCalled();
+      expect((screen.getByRole("button", { name: "Got it" }) as HTMLButtonElement).disabled).toBe(true);
+
+      await act(async () => resolve(graded));
+      expect(await screen.findByText("Values or variables?")).toBeTruthy();
+      await user.keyboard("g");
+      expect(onResult).toHaveBeenCalledWith("got");
     });
 
     it("shows a coach error and keeps the answer hidden", async () => {
@@ -202,24 +218,33 @@ describe("QuizCard", () => {
       expect(screen.queryByText(ANSWER)).toBeNull();
     });
 
-    it("sends follow-ups with the conversation so far and shows the reply", async () => {
+    it("sends only the new message and the conversation id, then shows the reply", async () => {
       const { coach, user } = withCoach();
       await user.type(screen.getByLabelText("Your answer"), "Keeps scope");
       await user.click(screen.getByRole("button", { name: /check with ai/i }));
       await user.type(await screen.findByLabelText("Message the AI coach"), "Values?");
       await user.click(screen.getByRole("button", { name: "Send" }));
-      expect(coach.ask).toHaveBeenCalledWith(
-        "q1",
-        [
-          { role: "assistant", content: "Values or variables?" },
-          { role: "user", content: "Values?" },
-        ],
-        "Keeps scope",
-      );
+      expect(coach.ask).toHaveBeenCalledWith("q1", { conversationId: "c1", message: "Values?", answer: "Keeps scope" });
       expect(await screen.findByText("Variables.")).toBeTruthy();
     });
 
-    it("offers a follow-up after revealing without grading, and restores the draft on error", async () => {
+    it("starts a new conversation after revealing without grading, and keeps its id", async () => {
+      const ask = vi.fn(async () => ({ ok: true as const, value: { reply: "Because.", conversationId: "c9", model: "m" } }));
+      const { user } = withCoach({ ask });
+      await user.click(screen.getByRole("button", { name: /show answer/i }));
+      await user.click(screen.getByRole("button", { name: /ask the ai coach/i }));
+      await user.type(screen.getByLabelText("Message the AI coach"), "Why?");
+      await user.click(screen.getByRole("button", { name: "Send" }));
+      await screen.findByText("Because.");
+      await user.type(screen.getByLabelText("Message the AI coach"), "And?");
+      await user.click(screen.getByRole("button", { name: "Send" }));
+      expect(ask.mock.calls.map((c) => (c as unknown as [string, { conversationId?: string }])[1].conversationId)).toEqual([
+        undefined,
+        "c9",
+      ]);
+    });
+
+    it("restores the draft when a follow-up fails", async () => {
       const { user } = withCoach({ ask: vi.fn(async () => ({ ok: false as const, error: "Busy." })) });
       await user.click(screen.getByRole("button", { name: /show answer/i }));
       await user.click(screen.getByRole("button", { name: /ask the ai coach/i }));
@@ -227,6 +252,7 @@ describe("QuizCard", () => {
       await user.click(screen.getByRole("button", { name: "Send" }));
       expect((await screen.findByRole("alert")).textContent).toBe("Busy.");
       expect((screen.getByLabelText("Message the AI coach") as HTMLTextAreaElement).value).toBe("Why?");
+      expect(screen.queryByText("Why?", { selector: "p" })).toBeNull();
     });
   });
 });

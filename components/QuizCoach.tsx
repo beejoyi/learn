@@ -2,13 +2,13 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AI_ANSWER_MAX, AI_HISTORY_MAX, AI_MESSAGE_MAX } from "@/lib/ai-limits";
+import { AI_ANSWER_MAX, AI_MESSAGE_MAX } from "@/lib/ai-limits";
 import { Markdown } from "@/lib/markdown/Markdown";
 import { cn } from "@/lib/utils";
-import type { AiChatMessage, AiFeedback, AiVerdict } from "@/progress/quizAi";
+import type { AiChatMessage, AiFeedback, AiReply, AiResult, AiVerdict } from "@/progress/quizAi";
 
 const fieldClass =
-  "w-full rounded-lg border border-border bg-background p-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60";
+  "w-full rounded-lg border border-border bg-background p-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring read-only:opacity-60";
 
 const isSubmitChord = (e: React.KeyboardEvent) => e.key === "Enter" && (e.ctrlKey || e.metaKey);
 
@@ -34,13 +34,15 @@ export function AnswerBox({
         rows={4}
         maxLength={AI_ANSWER_MAX}
         value={value}
-        disabled={pending}
+        // Read-only rather than disabled: a disabled box drops focus to <body>, where Space and G/R/S are shortcuts.
+        readOnly={pending}
+        aria-busy={pending}
         placeholder="Answer as you would in an interview, then let the AI coach check it."
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
           if (isSubmitChord(e)) {
             e.preventDefault();
-            if (value.trim()) onCheck();
+            if (value.trim() && !pending) onCheck();
           }
         }}
         className={fieldClass}
@@ -61,7 +63,7 @@ const VERDICT: Record<AiVerdict, { label: string; className: string }> = {
   incorrect: { label: "Not quite", className: "border-destructive/40 bg-destructive/10 text-destructive" },
 };
 
-export function FeedbackPanel({ feedback }: { feedback: AiFeedback }) {
+export function FeedbackPanel({ feedback, model }: { feedback: AiFeedback; model?: string }) {
   const verdict = VERDICT[feedback.verdict];
   return (
     <section aria-label="AI feedback" className="rounded-lg border border-border bg-background p-4">
@@ -74,6 +76,7 @@ export function FeedbackPanel({ feedback }: { feedback: AiFeedback }) {
       <p className="mt-3 text-sm">{feedback.summary}</p>
       <FeedbackList title="What you got right" items={feedback.strengths} />
       <FeedbackList title="What to add or fix" items={feedback.missing} />
+      {model && <p className="mt-3 text-xs text-muted-foreground">Checked by {model}</p>}
     </section>
   );
 }
@@ -93,17 +96,21 @@ function FeedbackList({ title, items }: { title: string; items: string[] }) {
 }
 
 /**
- * A short conversation with the coach about the card. When grading produced a follow-up question,
- * the chat opens with it so the learner can answer it straight away.
+ * A short conversation with the coach about the card. The server keeps the history; the chat only
+ * sends the new message and the conversation id. When grading produced a follow-up question, the
+ * chat opens with it (it is already the conversation's first message on the server).
  */
 export function FollowUpChat({
   opener,
+  conversationId: initialId,
   ask,
 }: {
   opener?: string;
-  ask: (history: AiChatMessage[]) => Promise<{ ok: true; value: string } | { ok: false; error: string }>;
+  conversationId?: string;
+  ask: (input: { conversationId?: string; message: string }) => Promise<AiResult<AiReply>>;
 }) {
   const [messages, setMessages] = useState<AiChatMessage[]>(opener ? [{ role: "assistant", content: opener }] : []);
+  const [conversationId, setConversationId] = useState(initialId);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -114,17 +121,18 @@ export function FollowUpChat({
     const content = draft.trim();
     if (!content || busy.current) return;
     busy.current = true;
-    const history = [...messages, { role: "user" as const, content }];
-    setMessages(history);
+    const before = messages;
+    setMessages([...before, { role: "user", content }]);
     setDraft("");
     setPending(true);
     setError("");
     try {
-      const result = await ask(history.slice(-AI_HISTORY_MAX));
-      if (result.ok) setMessages([...history, { role: "assistant", content: result.value }]);
-      else throw new Error(result.error);
+      const result = await ask({ conversationId, message: content });
+      if (!result.ok) throw new Error(result.error);
+      setConversationId(result.value.conversationId);
+      setMessages([...before, { role: "user", content }, { role: "assistant", content: result.value.reply }]);
     } catch (e) {
-      setMessages(messages);
+      setMessages(before);
       setDraft(content);
       setError(e instanceof Error && e.message ? e.message : "The AI coach failed. Try again.");
     } finally {
@@ -169,7 +177,7 @@ export function FollowUpChat({
         rows={2}
         maxLength={AI_MESSAGE_MAX}
         value={draft}
-        disabled={pending}
+        readOnly={pending}
         placeholder={messages.length ? "Answer the coach or ask something else…" : "Ask about this question…"}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {

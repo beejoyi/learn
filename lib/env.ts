@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini";
+export const DEFAULT_DAILY_LIMIT = 100;
 
 const schema = z.object({
   MONGODB_URI: z.string().min(1),
@@ -29,12 +30,17 @@ const schema = z.object({
     .string()
     .default("")
     .transform((value) => value.trim() || DEFAULT_OPENROUTER_MODEL),
-  /** AI calls (grades and follow-ups) per user per UTC day; 0 means no limit. */
+  /**
+   * Default AI calls (grades and follow-ups) per user per UTC day; 0 means no limit. An optional
+   * feature must not take the site down, so a value that is not a whole number falls back to 100.
+   */
   OPENROUTER_DAILY_LIMIT: z
     .string()
     .default("")
-    .transform((value) => Number(value.trim() || "100"))
-    .pipe(z.number().int().min(0)),
+    .transform((value) => {
+      const n = Number(value.trim() || DEFAULT_DAILY_LIMIT);
+      return Number.isInteger(n) && n >= 0 ? n : DEFAULT_DAILY_LIMIT;
+    }),
 });
 
 export type Env = z.output<typeof schema>;

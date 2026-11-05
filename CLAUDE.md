@@ -33,7 +33,7 @@ Three content types, all stored in MongoDB and edited in-app via Admin: **questi
 Layering (logic lives outside `app/`):
 - `models/*` — Mongoose schemas; import from `@/models` barrel. `lib/db.ts` `connectDb()` caches the connection on `globalThis`; also has `retryOnDuplicateKey`.
 - `content/` — domain logic for content: `queries/` (read), `parse/` + `import/` (canonical markdown with `<!-- learn:… id=… -->` markers, zod schemas in `import/schema.ts`), `pull.ts`, `revisions.ts` (edit history), `visibility.ts` (draft/published), `cycles.ts` (prereq cycle check), `backup.ts`.
-- `admin/` — admin service/queries/token logic; `progress/` — per-user progress (questions, quiz, graph, notes, dashboard; `quizAi.ts` is the OpenRouter quiz coach, client in `lib/openrouter.ts`, off when `OPENROUTER_API_KEY` is blank); `graph/layout.ts` — pure tiered layout for the prereq graph view.
+- `admin/` — admin service/queries/token logic; `progress/` — per-user progress (questions, quiz, graph, notes, dashboard; `quizAi.ts` is the OpenRouter quiz coach: client + model catalogue in `lib/openrouter.ts`, admin-chosen primary/backup models and daily limit in `lib/aiSettings.ts` (Admin → AI coach, env as defaults), off when `OPENROUTER_API_KEY` is blank); `graph/layout.ts` — pure tiered layout for the prereq graph view.
 - `app/(app)/**` — signed-in pages and Server Actions (`actions.ts` beside pages); `app/(app)/admin/**` admin-only UI; `app/api/content/*` token-authenticated content API (used by `scripts/content.ts`); `app/api/admin/export`.
 - `components/` — UI; `components/admin/` forms.
 
