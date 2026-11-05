@@ -6,6 +6,7 @@ import { AI_ANSWER_MAX, AI_MESSAGE_MAX } from "@/lib/ai-limits";
 import { Markdown } from "@/lib/markdown/Markdown";
 import { cn } from "@/lib/utils";
 import type { AiChatMessage, AiFeedback, AiReply, AiResult, AiVerdict } from "@/progress/quizAi";
+import { Notice } from "@/components/Notice";
 
 const fieldClass =
   "w-full rounded-lg border border-border bg-background p-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring read-only:opacity-60";
@@ -193,11 +194,7 @@ export function FollowUpChat({
           Send
         </Button>
       </div>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <Notice>{error}</Notice>}
     </section>
   );
 }

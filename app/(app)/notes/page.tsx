@@ -4,6 +4,7 @@ import { listSeriesWithProgress } from "@/content/queries";
 import { requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { buildMetadata } from "@/lib/seo";
+import { pageTitleClass } from "@/lib/ui";
 
 export const metadata = buildMetadata({
   title: "Notes",
@@ -18,7 +19,7 @@ export default async function NotesPage() {
 
   return (
     <section aria-labelledby="notes" className="grid gap-4">
-      <h1 id="notes" className="text-2xl font-semibold">
+      <h1 id="notes" className={pageTitleClass}>
         Learning notes
       </h1>
       {series.length === 0 ? (

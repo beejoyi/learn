@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Markdown } from "@/lib/markdown/Markdown";
 import type { NodeStatus } from "@/progress/graph";
 import { cn } from "@/lib/utils";
+import { Notice } from "@/components/Notice";
 
 type RelatedLink = { title: string; href: string };
 type RelatedTopic = { slug: string; title: string; state: NodeState; color?: string };
@@ -139,11 +140,7 @@ export function TopicPanel({ node, status, onStatus, related, pending, error, to
           </Chip>
         ))}
       </div>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <Notice>{error}</Notice>}
     </div>
   );
 

@@ -4,6 +4,7 @@ import { listGraphsWithProgress } from "@/content/queries";
 import { requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { buildMetadata } from "@/lib/seo";
+import { pageTitleClass } from "@/lib/ui";
 
 export const metadata = buildMetadata({
   title: "Graphs",
@@ -19,7 +20,7 @@ export default async function GraphsPage() {
 
   return (
     <section aria-labelledby="graphs" className="grid gap-4">
-      <h1 id="graphs" className="text-2xl font-semibold">
+      <h1 id="graphs" className={pageTitleClass}>
         Learning graphs
       </h1>
       {graphs.length === 0 ? (

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/components/BackLink";
 import { ProgressBar } from "@/components/ProgressBar";
 import { getBookView } from "@/content/queries";
 import { requireUser } from "@/lib/authz";
@@ -8,6 +9,8 @@ import { Markdown } from "@/lib/markdown/Markdown";
 import { cache } from "react";
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
+import { pageTitleClass } from "@/lib/ui";
+import { cn } from "@/lib/utils";
 
 const STATUS_LABEL = { got: "Got it", review: "Review" } as const;
 
@@ -41,15 +44,8 @@ export default async function BookPage({
 
   return (
     <article className="mx-auto w-full max-w-3xl">
-      <p className="text-sm">
-        <Link
-          href="/interview"
-          className="text-muted-foreground hover:underline"
-        >
-          Interview
-        </Link>
-      </p>
-      <h1 className="mt-1 text-3xl font-bold tracking-tight">{book.title}</h1>
+      <BackLink href="/interview">← Interview prep</BackLink>
+      <h1 className={cn("mt-1", pageTitleClass)}>{book.title}</h1>
       <p className="mt-2 text-sm tabular-nums text-muted-foreground">
         {mastered} / {questions.length} mastered
       </p>

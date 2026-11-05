@@ -8,6 +8,7 @@ import { Markdown } from "@/lib/markdown/Markdown";
 import { cache } from "react";
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
+import { pageTitleClass } from "@/lib/ui";
 
 const loadSeries = cache(getSeriesView);
 
@@ -41,7 +42,7 @@ export default async function SeriesPage({
     <div className="grid max-w-3xl gap-6">
       <header className="grid gap-1">
         <BackLink href="/notes">← All notes</BackLink>
-        <h1 className="text-2xl font-semibold">{view.series.title}</h1>
+        <h1 className={pageTitleClass}>{view.series.title}</h1>
         <p className="text-sm text-muted-foreground">
           {read}/{view.chapters.length} chapters read
         </p>

@@ -269,11 +269,12 @@
     text-wrap: balance;
     scroll-margin-top: 1.5rem;
   }
+  /* Below the 1.5rem page title (lib/ui.ts pageTitleClass) so a body heading never matches it. */
   .md h1 {
-    font-size: 1.5rem;
+    font-size: 1.375rem;
   }
   .md h2 {
-    font-size: 1.375rem;
+    font-size: 1.25rem;
   }
   .md h3 {
     font-size: 1.125rem;
@@ -442,8 +443,8 @@
  * Unlayered on purpose: these must beat the Tailwind utilities already on each element
  * (border-border, text-muted-foreground, hover:underline) for the hover states to show.
  */
-input:not([type="checkbox"], [type="radio"]):hover:not(:focus-visible, :disabled),
-textarea:hover:not(:focus-visible, :disabled),
+input:not([type="checkbox"], [type="radio"], [data-chrome="bare"]):hover:not(:focus-visible, :disabled),
+textarea:not([data-chrome="bare"]):hover:not(:focus-visible, :disabled),
 select:hover:not(:focus-visible, :disabled) {
   border-color: color-mix(in oklch, var(--border), var(--foreground) 25%);
 }
@@ -463,9 +464,14 @@ select:not([multiple], [size]) {
   background-size: 0.3125rem 0.3125rem;
   background-repeat: no-repeat;
 }
-/* The transparent outline is what forced-colors mode paints, since it drops box-shadow. */
-input:not([type="checkbox"], [type="radio"]):focus-visible,
-textarea:focus-visible,
+/*
+ * The transparent outline is what forced-colors mode paints, since it drops box-shadow.
+ * `data-chrome="bare"` opts a field out: a field that fills its own container and is focused the
+ * moment that container appears (the command palette's input) would otherwise draw a ring around
+ * itself inside the panel's border, which reads as a misaligned box rather than as focus.
+ */
+input:not([type="checkbox"], [type="radio"], [data-chrome="bare"]):focus-visible,
+textarea:not([data-chrome="bare"]):focus-visible,
 select:focus-visible {
   border-color: var(--ring);
   box-shadow: 0 0 0 0.1875rem color-mix(in oklch, var(--ring) 22%, transparent);

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { cache } from "react";
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
+import { pageTitleClass } from "@/lib/ui";
 
 const linkClass =
   "hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
@@ -130,7 +131,7 @@ export default async function ChapterPage({
       </nav>
 
       <article aria-labelledby="chapter-title" className="mt-2 min-w-0 lg:mt-0">
-        <h1 id="chapter-title" className="text-2xl font-semibold">
+        <h1 id="chapter-title" className={pageTitleClass}>
           {view.chapter.title}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">

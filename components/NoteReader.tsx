@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { setNoteReadAction } from "@/app/(app)/notes/actions";
+import { Notice } from "@/components/Notice";
 import { Button } from "@/components/ui/button";
 
 /** Toggles the chapter's read state; the label flips to "Read ✓" once saved optimistically. */
@@ -30,11 +31,7 @@ export function MarkReadButton({ noteId, initialRead }: { noteId: string; initia
       <Button variant={read ? "outline" : "default"} aria-pressed={read} onClick={toggle} disabled={pending}>
         {read ? "Read ✓" : "Mark as read"}
       </Button>
-      {failed && (
-        <p role="alert" className="text-sm text-destructive">
-          Could not save. Try again.
-        </p>
-      )}
+      {failed && <Notice>Could not save. Try again.</Notice>}
     </div>
   );
 }

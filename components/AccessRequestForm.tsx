@@ -5,6 +5,7 @@ import { sendRequestNoteAction, type NoteState } from "@/app/access/actions";
 import { Button } from "@/components/ui/button";
 import { REQUEST_NOTE_MAX, REQUEST_NOTE_MIN } from "@/lib/access-limits";
 import { cn } from "@/lib/utils";
+import { Notice } from "@/components/Notice";
 
 /** Lets a pending user tell the reviewing admin who they are; validated here and again on the server. */
 export function AccessRequestForm({ savedNote }: { savedNote?: string }) {
@@ -55,13 +56,9 @@ export function AccessRequestForm({ savedNote }: { savedNote?: string }) {
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
         {error ? (
-          <p id="access-note-error" role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
+          <Notice id="access-note-error">{error}</Notice>
         ) : state?.ok ? (
-          <p role="status" className="text-sm text-ok">
-            {state.message}
-          </p>
+          <Notice tone="ok">{state.message}</Notice>
         ) : (
           <span />
         )}

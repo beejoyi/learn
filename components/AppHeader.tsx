@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-/** Page width and gutters shared by the header row and every page's <main>, so they line up. */
-export const containerClass = "mx-auto w-full max-w-[87.5rem] px-4 sm:px-6 lg:px-8";
+/**
+ * Page width and gutters shared by the header row and every page's <main>, so they line up. 1200px
+ * keeps a list page's cards and a prose page's column within sight of each other; the app used to
+ * run to 1400px, which left list pages sprawling beside the 48rem reading column.
+ */
+export const containerClass = "mx-auto w-full max-w-[75rem] px-4 sm:px-6 lg:px-8";
 
 /**
  * The sticky header shell: the "Learn" mark plus whatever controls the caller puts beside it.

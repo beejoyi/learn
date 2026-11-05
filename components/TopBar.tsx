@@ -1,12 +1,14 @@
 "use client";
 
-import { Menu, X } from "lucide-react";
+import { Menu, Search, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { signOutAction } from "@/app/actions";
 import { AppHeader } from "@/components/AppHeader";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { lockPageScroll } from "@/lib/scrollLock";
+import { openSearch } from "@/lib/searchBus";
 import { cn } from "@/lib/utils";
 
 export type TopBarUser = { name: string; image?: string; isAdmin: boolean };
@@ -53,6 +55,12 @@ export function TopBar({ user }: { user: TopBarUser }) {
     setMenuOpen(false);
     setAccountOpen(false);
   }
+
+  // The mobile menu lays a backdrop over the rest of the viewport; the page behind it must not scroll.
+  useEffect(() => {
+    if (!menuOpen) return;
+    return lockPageScroll();
+  }, [menuOpen]);
 
   // Escape closes whichever menu is open and puts focus back on its button, so it is not lost with the
   // unmounted menu; a tap or click outside the account menu closes it.
@@ -129,6 +137,24 @@ export function TopBar({ user }: { user: TopBarUser }) {
       </nav>
 
       <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          onClick={openSearch}
+          aria-label="Search"
+          aria-keyshortcuts="Control+K Meta+K"
+          className="inline-flex h-9 items-center gap-2 rounded-md px-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:border sm:border-border sm:bg-background sm:pr-1.5 sm:pl-2.5 pointer-coarse:h-10"
+        >
+          <Search className="size-4 shrink-0" aria-hidden />
+          <span aria-hidden className="hidden text-sm sm:inline">
+            Search
+          </span>
+          <kbd
+            aria-hidden
+            className="ml-6 hidden rounded border border-border px-1.5 py-0.5 text-[0.6875rem] font-sans tabular-nums lg:inline"
+          >
+            ⌘K
+          </kbd>
+        </button>
         <ThemeToggle />
         <div ref={accountRef} className="relative">
           <button

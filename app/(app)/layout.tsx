@@ -1,4 +1,6 @@
 import { containerClass } from "@/components/AppHeader";
+import { CommandPalette } from "@/components/CommandPalette";
+import { Toaster } from "@/components/Toast";
 import { TopBar } from "@/components/TopBar";
 import { requireUser } from "@/lib/authz";
 import { cn } from "@/lib/utils";
@@ -19,6 +21,9 @@ export default async function AppLayout({
         user={{ name: user.name, image: user.image, isAdmin: user.isAdmin }}
       />
       <main className={cn(containerClass, "flex-1 py-6")}>{children}</main>
+      {/* One of each for the whole signed-in app: the palette opens on ⌘K or the header's button. */}
+      <CommandPalette />
+      <Toaster />
     </>
   );
 }

@@ -4,21 +4,10 @@ import { ChevronDown } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { lockPageScroll } from "@/lib/scrollLock";
 import { cn } from "@/lib/utils";
 
 const OVERLAY_EVENT = "learn-overlay-open";
-
-/** How many overlays are holding the page still. The last one to close gives scrolling back. */
-let scrollLocks = 0;
-
-function lockPageScroll(): () => void {
-  scrollLocks += 1;
-  if (scrollLocks === 1) document.body.style.overflow = "hidden";
-  return () => {
-    scrollLocks = Math.max(0, scrollLocks - 1);
-    if (scrollLocks === 0) document.body.style.overflow = "";
-  };
-}
 
 function focusable(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)")];

@@ -1,4 +1,5 @@
 import { BackLink } from "@/components/BackLink";
+import { pageTitleClass } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
 // The admin page layout standard. Every admin page is one <AdminPage>; inside it, groups of
@@ -36,7 +37,7 @@ export function AdminPage({
       <header className="grid gap-2">
         {back && <BackLink href={back.href}>← {back.label}</BackLink>}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="min-w-0 text-2xl font-semibold">{title}</h1>
+          <h1 className={cn("min-w-0", pageTitleClass)}>{title}</h1>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
         {description && <div className="max-w-3xl text-sm text-muted-foreground">{description}</div>}

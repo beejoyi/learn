@@ -11,6 +11,7 @@ import type { AdminRelated } from "@/admin/queries";
 import { inputClass } from "@/components/admin/SaveBar";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/lib/markdown/Markdown";
+import { Notice } from "@/components/Notice";
 
 type NoteHit = { id: string; title: string; toc: { anchor: string; text: string }[] };
 
@@ -149,11 +150,7 @@ export function RelatedPicker({ nodeId, subjects, initial }: { nodeId: string; s
         )}
       </div>
 
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <Notice>{error}</Notice>}
     </fieldset>
   );
 }

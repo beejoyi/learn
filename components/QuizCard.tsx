@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnswerBox, FeedbackPanel, FollowUpChat } from "@/components/QuizCoach";
+import { Notice } from "@/components/Notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Markdown } from "@/lib/markdown/Markdown";
 import type { MarkResult } from "@/progress/questions";
@@ -44,6 +45,19 @@ const activatesOnSpace = (target: EventTarget | null) =>
   target instanceof HTMLElement && Boolean(target.closest("button, a[href], summary, [role='button']"));
 
 const suggestedRing = "ring-2 ring-ring ring-offset-2 ring-offset-card";
+
+/**
+ * The shortcut for a control, printed on the control itself. `aria-hidden` on purpose: the key is a
+ * hint for pointer users, and leaving it out of the accessible name keeps that name the plain label.
+ * `border-current` takes the button's own text colour, so one chip suits every variant.
+ */
+function KeyHint({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd aria-hidden className="ml-1.5 rounded border border-current px-1 text-[0.6875rem] font-sans leading-4 opacity-60">
+      {children}
+    </kbd>
+  );
+}
 
 export function QuizCard({ view, onResult, onFinish, coach }: QuizCardProps) {
   if (view.done || !view.current) return <Done view={view} />;
@@ -146,11 +160,7 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
       {coach && !revealed && (
         <div className="mt-4">
           <AnswerBox value={answer} onChange={setAnswer} onCheck={() => void check()} pending={checking} />
-          {coachError && (
-            <p role="alert" className="mt-2 text-sm text-destructive">
-              {coachError}
-            </p>
-          )}
+          {coachError && <Notice className="mt-2">{coachError}</Notice>}
         </div>
       )}
 
@@ -171,7 +181,7 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
           <div>
             <Button type="button" variant="outline" disabled={checking} onClick={() => setRevealed(true)}>
               Show answer
-              <kbd className="ml-1 rounded border border-border px-1 text-xs text-muted-foreground">Space</kbd>
+              <KeyHint>Space</KeyHint>
             </Button>
           </div>
         )}
@@ -196,6 +206,7 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
             className={cn("bg-ok text-background hover:bg-ok/85", feedback?.suggested === "got" && suggestedRing)}
           >
             Got it
+            <KeyHint>G</KeyHint>
           </Button>
           <Button
             type="button"
@@ -205,9 +216,11 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
             className={cn("bg-track-1 text-background hover:bg-track-1/85", feedback?.suggested === "review" && suggestedRing)}
           >
             Review
+            <KeyHint>R</KeyHint>
           </Button>
           <Button type="button" variant="outline" disabled={pending || checking} onClick={() => void mark("skip")}>
             Skip
+            <KeyHint>S</KeyHint>
           </Button>
         </div>
         {feedback && (
@@ -225,16 +238,10 @@ function Live({ view, card, onResult, onFinish, coach }: QuizCardProps & { card:
         )}
       </div>
 
-      {failed && (
-        <p role="alert" className="mt-3 text-sm text-destructive">
-          Could not save that answer. Try again.
-        </p>
-      )}
+      {failed && <Notice className="mt-3">Could not save that answer. Try again.</Notice>}
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted-foreground">
-        <span>
-          Keys: Space shows the answer, G got it, R review, S skip{coach ? ", Ctrl+Enter checks your answer" : ""}.
-        </span>
+        <span>{coach ? "Ctrl+Enter checks your answer." : ""}</span>
         <Button type="button" variant="ghost" size="sm" onClick={onFinish}>
           End quiz
         </Button>

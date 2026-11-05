@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { listUnfinished } from "@/progress/quiz";
 import { buildMetadata } from "@/lib/seo";
+import { pageTitleClass } from "@/lib/ui";
 
 export const metadata = buildMetadata({
   title: "Interview prep",
@@ -23,7 +24,7 @@ export default async function InterviewPage() {
 
   return (
     <div className="grid gap-4">
-      <h1 className="text-2xl font-semibold">Interview prep</h1>
+      <h1 className={pageTitleClass}>Interview prep</h1>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <QuizSetup
           books={books.map(({ id, title, parts }) => ({ id, title, parts }))}

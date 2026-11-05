@@ -1,8 +1,8 @@
 "use client";
 
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Minus, Plus } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setNodeStatusAction } from "@/app/(app)/graphs/actions";
 import { Chip } from "@/components/Chip";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import type { GraphView as GraphData } from "@/content/queries";
 import { layoutGraph, LBL, NH, NW, readyNext } from "@/graph/layout";
 import type { NodeStatus } from "@/progress/graph";
+import { pageTitleClass } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
 const statusOf = (progress: GraphData["progress"], id: string): NodeStatus => progress[id] ?? "none";
@@ -25,6 +26,12 @@ const EDGE_COLOR = {
 } as const;
 
 const TRACK_COLORS = 6;
+
+// Zoom bounds for the canvas. A graph is laid out at its natural size and then scaled to taste;
+// below 35% the node labels stop being readable, above 200% there is nothing left to see.
+const MIN_ZOOM = 0.35;
+const MAX_ZOOM = 2;
+const ZOOM_STEP = 0.2;
 
 // About 20 characters of 13px text fit beside the status icon; longer titles wrap onto a second line.
 const LINE_CHARS = 20;
@@ -66,6 +73,10 @@ export function GraphView({ data }: { data: GraphData }) {
   const [error, setError] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  // The canvas scale. Until the user sets it themselves the graph is fitted to the canvas width,
+  // which is what makes a wide graph usable on a phone instead of a horizontal-scroll hunt.
+  const [zoom, setZoom] = useState(1);
+  const chosenZoom = useRef(false);
   // Whether this page pushed the reader's history entry, so closing can step back over it.
   const pushedReader = useRef(false);
 
@@ -94,14 +105,37 @@ export function GraphView({ data }: { data: GraphData }) {
     [nodes, layout],
   );
 
+  // The scale at which the whole graph fits the canvas; never enlarges, so a graph narrower than
+  // the canvas is still drawn at its natural size.
+  const fitZoom = useCallback(() => {
+    const el = canvasRef.current;
+    if (!el || !layout.width) return 1;
+    return Math.min(1, Math.max(MIN_ZOOM, el.clientWidth / layout.width));
+  }, [layout.width]);
+
+  // Fit on first paint and on resize, until the user picks a zoom; "Fit" hands tracking back.
+  useEffect(() => {
+    if (chosenZoom.current) return;
+    const apply = () => setZoom(fitZoom());
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, [fitZoom]);
+
+  const stepZoom = (by: number) => {
+    chosenZoom.current = true;
+    setZoom((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round((z + by) * 100) / 100)));
+  };
+
   // On a canvas narrower than the graph (phones), bring the selected topic, else the first one ready, into view.
   const focusId = current?.id ?? upNext[0]?.id;
   useEffect(() => {
     const el = canvasRef.current;
     const pos = focusId ? layout.positions[focusId] : undefined;
     if (!el || !pos || el.scrollWidth <= el.clientWidth) return;
-    el.scrollTo({ left: pos.x + NW / 2 - el.clientWidth / 2 });
-  }, [focusId, layout]);
+    // Positions are layout units; the canvas scrolls in rendered pixels, so they scale with the zoom.
+    el.scrollTo({ left: (pos.x + NW / 2) * zoom - el.clientWidth / 2 });
+  }, [focusId, layout, zoom]);
 
   // The palette has TRACK_COLORS track colours (--t-0 …); further tracks reuse them in order.
   const colorOf = (trackKey: string) => `var(--t-${(trackIdx.get(trackKey) ?? 0) % TRACK_COLORS})`;
@@ -246,7 +280,7 @@ export function GraphView({ data }: { data: GraphData }) {
     <div className="grid gap-5">
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-balance">{graph.title}</h1>
+          <h1 className={cn(pageTitleClass, "text-balance")}>{graph.title}</h1>
           {graph.subtitle && <p className="mt-1 max-w-prose text-sm text-muted-foreground">{graph.subtitle}</p>}
         </div>
         <div className="w-full sm:w-72">
@@ -297,10 +331,49 @@ export function GraphView({ data }: { data: GraphData }) {
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_25rem]">
         <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-background">
+          <div className="flex items-center justify-end gap-1 border-b border-border px-2 py-1.5">
+            <div role="group" aria-label="Zoom" className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                aria-label="Zoom out"
+                disabled={zoom <= MIN_ZOOM}
+                onClick={() => stepZoom(-ZOOM_STEP)}
+              >
+                <Minus aria-hidden />
+              </Button>
+              {/* The readout is the control's value, so it is announced when it changes. */}
+              <output aria-live="polite" className="w-12 text-center text-xs tabular-nums text-muted-foreground">
+                {Math.round(zoom * 100)}%
+              </output>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                aria-label="Zoom in"
+                disabled={zoom >= MAX_ZOOM}
+                onClick={() => stepZoom(ZOOM_STEP)}
+              >
+                <Plus aria-hidden />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  chosenZoom.current = false;
+                  setZoom(fitZoom());
+                }}
+              >
+                Fit
+              </Button>
+            </div>
+          </div>
           <div ref={canvasRef} className="overflow-auto">
             <svg
-              width={layout.width}
-              height={layout.height}
+              width={Math.round(layout.width * zoom)}
+              height={Math.round(layout.height * zoom)}
               viewBox={`0 0 ${layout.width} ${layout.height}`}
               role="group"
               aria-label="Prerequisite graph"
