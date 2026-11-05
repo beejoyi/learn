@@ -32,21 +32,29 @@ export function CommandPalette() {
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
-  const [hits, setHits] = useState<SearchHit[]>([]);
+  // Results carry the term they answer. Everything the list shows is then derived from whether
+  // that term is still the one in the box, so results for "clo" can never be shown — or opened
+  // with Enter — while the box says "closure", and no effect has to clear them.
+  const [result, setResult] = useState<{ term: string; hits: SearchHit[]; failed: boolean }>({
+    term: "",
+    hits: [],
+    failed: false,
+  });
   const [at, setAt] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const short = term.trim().length < MIN_CHARS;
-  // Below MIN_CHARS there is nothing to show and nothing in flight that matters, so both are
-  // derived rather than cleared from the effect — the state itself is reset on the way out.
-  const shown = short ? [] : hits;
-  const busy = loading && !short;
+  const trimmed = term.trim();
+  const short = trimmed.length < MIN_CHARS;
+  const answered = result.term === trimmed;
+  const shown = !short && answered ? result.hits : [];
+  const busy = !short && !answered;
+  // The term can shrink the list under a selection made against a longer one.
+  const active = Math.min(at, Math.max(0, shown.length - 1));
 
   // Closing is what resets the palette, so the next opening always starts clean without an effect
   // writing state on the way in.
   const close = useCallback(() => {
     setOpen(false);
     setTerm("");
-    setHits([]);
+    setResult({ term: "", hits: [], failed: false });
     setAt(0);
   }, []);
 
@@ -86,28 +94,26 @@ export function CommandPalette() {
     if (!open || short) return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
-      setLoading(true);
       try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(term.trim())}`, {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
           signal: controller.signal,
         });
         if (!response.ok) throw new Error(String(response.status));
         const body = (await response.json()) as { hits: SearchHit[] };
-        setHits(body.hits);
+        setResult({ term: trimmed, hits: body.hits, failed: false });
         setAt(0);
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
-        setHits([]);
+        // Recorded against this term too, so the list stops saying it is still searching.
+        setResult({ term: trimmed, hits: [], failed: true });
         toast("Search is not answering. Try again in a moment.", "error");
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
       }
     }, DEBOUNCE_MS);
     return () => {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [term, open, short]);
+  }, [trimmed, open, short]);
 
   function go(hit: SearchHit) {
     close();
@@ -118,12 +124,13 @@ export function CommandPalette() {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (!shown.length) return;
-      setAt((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length);
+      // Steps from the visible selection, not the raw index, which a shorter list may have clamped.
+      setAt((active + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length);
       return;
     }
-    if (e.key === "Enter" && shown[at]) {
+    if (e.key === "Enter" && shown[active]) {
       e.preventDefault();
-      go(shown[at]);
+      go(shown[active]);
     }
   }
 
@@ -154,7 +161,7 @@ export function CommandPalette() {
           aria-expanded={shown.length > 0}
           aria-controls={listId}
           aria-autocomplete="list"
-          aria-activedescendant={shown.length ? optionId(at) : undefined}
+          aria-activedescendant={shown.length ? optionId(active) : undefined}
           aria-label="Search questions, topics and chapters"
           placeholder="Search questions, topics and chapters…"
           value={term}
@@ -177,7 +184,11 @@ export function CommandPalette() {
           </p>
         ) : shown.length === 0 ? (
           <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-            {busy ? "Searching…" : "Nothing matched. Try fewer words."}
+            {busy
+              ? "Searching…"
+              : result.failed
+                ? "Search is not answering. Try again in a moment."
+                : "Nothing matched. Try fewer words."}
           </p>
         ) : (
           <ul id={listId} role="listbox" aria-label="Results" className="grid gap-0.5">
@@ -189,12 +200,12 @@ export function CommandPalette() {
                     type="button"
                     id={optionId(i)}
                     role="option"
-                    aria-selected={i === at}
+                    aria-selected={i === active}
                     onPointerMove={() => setAt(i)}
                     onClick={() => go(hit)}
                     className={cn(
                       "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left",
-                      i === at ? "bg-muted" : "hover:bg-muted/60",
+                      i === active ? "bg-muted" : "hover:bg-muted/60",
                     )}
                   >
                     <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />

@@ -2,7 +2,7 @@
 
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { setNodeStatusAction } from "@/app/(app)/graphs/actions";
 import { Chip } from "@/components/Chip";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -73,10 +73,12 @@ export function GraphView({ data }: { data: GraphData }) {
   const [error, setError] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
-  // The canvas scale. Until the user sets it themselves the graph is fitted to the canvas width,
-  // which is what makes a wide graph usable on a phone instead of a horizontal-scroll hunt.
-  const [zoom, setZoom] = useState(1);
-  const chosenZoom = useRef(false);
+  // The canvas scale. Until the user picks one the graph is fitted to the canvas width, which is
+  // what makes a wide graph usable on a phone instead of a horizontal-scroll hunt. Both parts are
+  // state, and the scale is derived from them: a zoom the user chose then survives every resize,
+  // and "Fit" puts the graph back under the canvas's control.
+  const [canvasWidth, setCanvasWidth] = useState(0);
+  const [chosenZoom, setChosenZoom] = useState<number | null>(null);
   // Whether this page pushed the reader's history entry, so closing can step back over it.
   const pushedReader = useRef(false);
 
@@ -105,27 +107,24 @@ export function GraphView({ data }: { data: GraphData }) {
     [nodes, layout],
   );
 
+  // Measured, not read off a window resize: the canvas also changes width when the side panel
+  // comes and goes at the lg breakpoint, which a window listener would miss.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setCanvasWidth(entry.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // The scale at which the whole graph fits the canvas; never enlarges, so a graph narrower than
   // the canvas is still drawn at its natural size.
-  const fitZoom = useCallback(() => {
-    const el = canvasRef.current;
-    if (!el || !layout.width) return 1;
-    return Math.min(1, Math.max(MIN_ZOOM, el.clientWidth / layout.width));
-  }, [layout.width]);
+  const fitZoom =
+    canvasWidth && layout.width ? Math.min(1, Math.max(MIN_ZOOM, canvasWidth / layout.width)) : 1;
+  const zoom = chosenZoom ?? fitZoom;
 
-  // Fit on first paint and on resize, until the user picks a zoom; "Fit" hands tracking back.
-  useEffect(() => {
-    if (chosenZoom.current) return;
-    const apply = () => setZoom(fitZoom());
-    apply();
-    window.addEventListener("resize", apply);
-    return () => window.removeEventListener("resize", apply);
-  }, [fitZoom]);
-
-  const stepZoom = (by: number) => {
-    chosenZoom.current = true;
-    setZoom((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round((z + by) * 100) / 100)));
-  };
+  const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100));
+  const stepZoom = (by: number) => setChosenZoom((current) => clampZoom((current ?? fitZoom) + by));
 
   // On a canvas narrower than the graph (phones), bring the selected topic, else the first one ready, into view.
   const focusId = current?.id ?? upNext[0]?.id;
@@ -361,10 +360,7 @@ export function GraphView({ data }: { data: GraphData }) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  chosenZoom.current = false;
-                  setZoom(fitZoom());
-                }}
+                onClick={() => setChosenZoom(null)}
               >
                 Fit
               </Button>

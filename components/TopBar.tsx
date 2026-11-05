@@ -62,6 +62,19 @@ export function TopBar({ user }: { user: TopBarUser }) {
     return lockPageScroll();
   }, [menuOpen]);
 
+  // The menu, its backdrop and the hamburger are all md:hidden, so widening past md would leave the
+  // page locked with nothing left on screen to release it. The menu can only be opened below md
+  // (the hamburger is its only trigger), so watching for the change is enough.
+  useEffect(() => {
+    if (!menuOpen || typeof window.matchMedia !== "function") return;
+    const wide = window.matchMedia("(min-width: 48rem)");
+    const onChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setMenuOpen(false);
+    };
+    wide.addEventListener("change", onChange);
+    return () => wide.removeEventListener("change", onChange);
+  }, [menuOpen]);
+
   // Escape closes whichever menu is open and puts focus back on its button, so it is not lost with the
   // unmounted menu; a tap or click outside the account menu closes it.
   useEffect(() => {
