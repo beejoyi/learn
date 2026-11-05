@@ -24,8 +24,9 @@ so Docker is not needed. The first run downloads a `mongod` binary.
 
 ## AI quiz coach (OpenRouter)
 
-Set `OPENROUTER_API_KEY` (from <https://openrouter.ai/keys>; a free key works with
-free models) to make the AI coach available in quizzes. Learners can then type their
+Add an OpenRouter key (from <https://openrouter.ai/keys>; a free account works with
+free models) in **Admin → AI coach**, or set `OPENROUTER_API_KEY`, to make the AI coach
+available in quizzes. Learners can then type their
 answer and **Check with AI** (Ctrl/Cmd+Enter) to get a verdict, a score, what they got
 right and missed, and a suggested Got it / Review mark. After the answer is shown,
 they can carry on a short **follow-up** chat with the coach about the card. Marking
@@ -33,6 +34,11 @@ stays with the learner, and the keyboard shortcuts work as before.
 
 Manage it in **Admin → AI coach**:
 
+- save, replace or remove the **OpenRouter key**. It is checked with OpenRouter first
+  (a rejected key is not saved), stored encrypted with a key derived from
+  `AUTH_SECRET`, never shown again (only its last 4 characters), and overrides
+  `OPENROUTER_API_KEY`. Changing `AUTH_SECRET` makes a saved key unreadable; the page
+  then asks for it again;
 - turn the coach on or off;
 - pick the **primary** and **backup** models from OpenRouter's live catalogue (free
   models are listed by default, paid ones on request, and any model id can be
@@ -43,8 +49,8 @@ Manage it in **Admin → AI coach**:
 - **Test models** sends a one-word prompt to each model and shows which ones answer.
 
 Until an admin saves settings, `OPENROUTER_MODEL` (default `openai/gpt-4o-mini`) and
-`OPENROUTER_DAILY_LIMIT` (default 100) apply. The key itself only lives in the
-environment.
+`OPENROUTER_DAILY_LIMIT` (default 100) apply. The full backup (`npm run backup`)
+includes the settings with the key still encrypted.
 
 Only the card's question, context and reference answer plus the learner's own text
 are sent, and only for a visible question in the learner's own session. Follow-up
@@ -63,7 +69,8 @@ message), so the model only sees replies it actually wrote.
 3. **Vercel.** Import the repo with **Root Directory** `web`, and set these
    environment variables: `MONGODB_URI`, `AUTH_SECRET` (`npx auth secret`),
    `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `ADMIN_EMAILS` (your Google email),
-   and optionally `OPENROUTER_API_KEY` for the AI quiz coach.
+   and optionally `OPENROUTER_API_KEY` for the AI quiz coach (or add the key later
+   in Admin → AI coach).
    Leave `AUTH_DEV_LOGIN` unset. Outside Vercel, also set `AUTH_TRUST_HOST=true`
    or `AUTH_URL`.
 4. **Content.** The legacy files were imported into the local database and removed.

@@ -2,7 +2,8 @@ import mongoose, { Schema, model } from "mongoose";
 
 /**
  * The AI coach settings an admin chooses (one document, `_id: "ai"`). Unset fields fall back to the
- * environment; the OpenRouter key itself only ever lives in the environment.
+ * environment. An OpenRouter key saved here is encrypted (lib/secrets.ts) and overrides
+ * OPENROUTER_API_KEY; only its last characters are kept in the clear, as a hint.
  */
 const aiSettingsSchema = new Schema(
   {
@@ -11,6 +12,9 @@ const aiSettingsSchema = new Schema(
     primaryModel: String,
     fallbackModel: { type: String, default: "" },
     dailyLimit: Number,
+    apiKeyEncrypted: String,
+    apiKeyHint: String,
+    apiKeyUpdatedAt: Date,
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },

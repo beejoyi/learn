@@ -181,7 +181,7 @@ export function AiSettingsForm({
         <span>
           <span className="font-medium">Offer the AI coach in quizzes</span>
           <span className="block text-muted-foreground">
-            {keyConfigured ? "Learners can check answers and ask follow-ups." : "Needs OPENROUTER_API_KEY first."}
+            {keyConfigured ? "Learners can check answers and ask follow-ups." : "Needs an OpenRouter key first (above)."}
           </span>
         </span>
       </label>

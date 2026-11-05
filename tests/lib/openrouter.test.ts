@@ -7,6 +7,7 @@ import {
   checkModels,
   extractJson,
   listCatalog,
+  verifyKey,
   parseCatalog,
   resetCatalogCache,
 } from "@/lib/openrouter";
@@ -33,7 +34,7 @@ describe("openrouter", () => {
   it("posts the messages with the key and returns the reply text and model", async () => {
     const fetch = vi.fn(async () => reply("  hello  "));
     const result = await chatCompletion(msg, {
-      models: ["a/one:free"],
+      apiKey: "sk-test", models: ["a/one:free"],
       fetch,
       jsonSchema: { name: "x", schema: { type: "object" } },
     });
@@ -55,7 +56,7 @@ describe("openrouter", () => {
       .mockResolvedValueOnce(reply("not json"))
       .mockResolvedValueOnce(reply('{"ok":true}'));
     const result = await chatCompletion(msg, {
-      models: ["a/1", "a/2", "a/3", "a/4"],
+      apiKey: "sk-test", models: ["a/1", "a/2", "a/3", "a/4"],
       fetch,
       accept: (t) => t.startsWith("{"),
     });
@@ -68,25 +69,40 @@ describe("openrouter", () => {
       .fn()
       .mockRejectedValueOnce(new TypeError("network"))
       .mockResolvedValueOnce(new Response("", { status: 429 }));
-    await expect(chatCompletion(msg, { models: ["a/1", "a/2"], fetch })).rejects.toThrow(/busy/);
+    await expect(chatCompletion(msg, { apiKey: "sk-test", models: ["a/1", "a/2"], fetch })).rejects.toThrow(/busy/);
     await expect(
-      chatCompletion(msg, { models: ["a/1"], fetch: async () => new Response("x", { status: 500 }) }),
+      chatCompletion(msg, { apiKey: "sk-test", models: ["a/1"], fetch: async () => new Response("x", { status: 500 }) }),
     ).rejects.toBeInstanceOf(AiError);
   });
 
   it("does not fall back when the key is rejected", async () => {
     const fetch = vi.fn(async () => new Response("", { status: 401 }));
-    await expect(chatCompletion(msg, { models: ["a/1", "a/2"], fetch })).rejects.toThrow(/key was rejected/);
+    await expect(chatCompletion(msg, { apiKey: "sk-test", models: ["a/1", "a/2"], fetch })).rejects.toThrow(/key was rejected/);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("refuses to call without a key or without a model", async () => {
     const fetch = vi.fn();
-    await expect(chatCompletion(msg, { models: [], fetch })).rejects.toThrow(/No AI model/);
-    vi.stubEnv("OPENROUTER_API_KEY", "");
-    resetEnvCache();
-    await expect(chatCompletion(msg, { models: ["a/1"], fetch })).rejects.toThrow(/not configured/);
+    await expect(chatCompletion(msg, { apiKey: "sk-test", models: [], fetch })).rejects.toThrow(/No AI model/);
+    await expect(chatCompletion(msg, { apiKey: "", models: ["a/1"], fetch })).rejects.toThrow(/not configured/);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("verifyKey tells valid, rejected and unverified keys apart", async () => {
+    const valid = vi.fn(async () => new Response(JSON.stringify({ data: { label: "learn", is_free_tier: true } })));
+    expect(await verifyKey("sk-or-1", { fetch: valid })).toEqual({ status: "valid", label: "learn", freeTier: true });
+    const [url, init] = valid.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://openrouter.ai/api/v1/key");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer sk-or-1");
+    expect(await verifyKey("x", { fetch: async () => new Response("", { status: 401 }) })).toEqual({ status: "rejected" });
+    expect(await verifyKey("x", { fetch: async () => new Response("", { status: 502 }) })).toEqual({ status: "unverified" });
+    expect(
+      await verifyKey("x", {
+        fetch: async () => {
+          throw new TypeError("offline");
+        },
+      }),
+    ).toEqual({ status: "unverified" });
   });
 
   it("extractJson finds the object inside fences or prose", () => {
@@ -138,7 +154,7 @@ describe("openrouter", () => {
       .fn()
       .mockResolvedValueOnce(reply("OK"))
       .mockResolvedValueOnce(new Response("", { status: 404 }));
-    const results = await checkModels(["a/1", "a/2"], { fetch });
+    const results = await checkModels(["a/1", "a/2"], { apiKey: "sk-test", fetch });
     expect(results.map(({ model, ok }) => ({ model, ok }))).toEqual([
       { model: "a/1", ok: true },
       { model: "a/2", ok: false },

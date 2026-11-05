@@ -1,6 +1,8 @@
+import { AiKeyForm } from "@/components/admin/AiKeyForm";
 import { AiSettingsForm } from "@/components/admin/AiSettingsForm";
-import { getAiSettings } from "@/lib/aiSettings";
+import { getAiConfig } from "@/lib/aiSettings";
 import { connectDb } from "@/lib/db";
+import { formatDateTime } from "@/lib/format";
 import { listCatalog } from "@/lib/openrouter";
 import { buildMetadata } from "@/lib/seo";
 
@@ -12,7 +14,8 @@ export const metadata = buildMetadata({
 
 export default async function AiSettingsPage() {
   await connectDb();
-  const [settings, catalog] = await Promise.all([getAiSettings(), listCatalog()]);
+  const { settings, apiKey } = await getAiConfig();
+  const catalog = await listCatalog({ apiKey });
   return (
     <section className="grid max-w-3xl gap-4">
       <h1 className="text-2xl font-semibold">AI coach</h1>
@@ -24,15 +27,12 @@ export default async function AiSettingsPage() {
         . Free models cost nothing but are rate-limited and come and go, so pick a backup: it is used
         whenever the primary model fails, is busy, or gives a reply the coach cannot read.
       </p>
-      {!settings.keyConfigured && (
-        <p role="status" className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
-          <strong>No OpenRouter key.</strong> Set <code>OPENROUTER_API_KEY</code> in the environment (a free key from{" "}
-          <a href="https://openrouter.ai/keys" className="underline" target="_blank" rel="noreferrer">
-            openrouter.ai/keys
-          </a>{" "}
-          works with free models). Until then the coach stays off whatever you choose here.
-        </p>
-      )}
+      <AiKeyForm
+        source={settings.keySource}
+        hint={settings.keyHint}
+        updatedAt={settings.keyUpdatedAt ? formatDateTime(settings.keyUpdatedAt) : undefined}
+        unreadable={settings.keyUnreadable}
+      />
       <AiSettingsForm
         initial={{
           enabled: settings.enabled,

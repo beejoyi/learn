@@ -1,5 +1,3 @@
-import { getEnv } from "@/lib/env";
-
 export const OPENROUTER_API = "https://openrouter.ai/api/v1";
 export const OPENROUTER_URL = `${OPENROUTER_API}/chat/completions`;
 
@@ -9,6 +7,8 @@ export type ChatMessage = { role: "system" | "user" | "assistant"; content: stri
 export class AiError extends Error {}
 
 export type ChatOptions = {
+  /** The OpenRouter key in effect (see getAiConfig in lib/aiSettings.ts). */
+  apiKey: string;
   /** Tried in order: a model that fails, or whose reply `accept` rejects, falls through to the next. */
   models: string[];
   maxTokens?: number;
@@ -83,7 +83,7 @@ async function attempt(model: string, messages: ChatMessage[], options: ChatOpti
 
 /** One chat completion through OpenRouter, falling back through `options.models` in order. */
 export async function chatCompletion(messages: ChatMessage[], options: ChatOptions): Promise<ChatReply> {
-  const key = getEnv().OPENROUTER_API_KEY;
+  const key = options.apiKey;
   if (!key) throw new AiError("The AI coach is not configured.");
   const models = [...new Set(options.models.filter(Boolean))];
   if (!models.length) throw new AiError("No AI model is selected.");
@@ -159,12 +159,12 @@ export function parseCatalog(data: unknown): CatalogModel[] {
 
 /** OpenRouter's model catalogue, cached for a few minutes; an empty list with an error when it cannot be read. */
 export async function listCatalog(
-  options: { fetch?: typeof fetch; now?: number } = {},
+  options: { apiKey?: string; fetch?: typeof fetch; now?: number } = {},
 ): Promise<{ models: CatalogModel[]; error?: string }> {
   const now = options.now ?? Date.now();
   if (catalogCache && now - catalogCache.at < CATALOG_TTL_MS) return { models: catalogCache.models };
   try {
-    const key = getEnv().OPENROUTER_API_KEY;
+    const key = options.apiKey;
     const response = await (options.fetch ?? fetch)(`${OPENROUTER_API}/models`, {
       headers: key ? { Authorization: `Bearer ${key}` } : {},
       cache: "no-store",
@@ -184,7 +184,10 @@ export async function listCatalog(
 export type ModelCheck = { model: string; ok: boolean; ms: number; error?: string };
 
 /** Asks each model for a one-word reply, one at a time (no fallback), and reports how it went. */
-export async function checkModels(models: string[], options: { fetch?: typeof fetch } = {}): Promise<ModelCheck[]> {
+export async function checkModels(
+  models: string[],
+  options: { apiKey: string; fetch?: typeof fetch },
+): Promise<ModelCheck[]> {
   const results: ModelCheck[] = [];
   for (const model of models) {
     const started = Date.now();
@@ -206,4 +209,31 @@ export async function checkModels(models: string[], options: { fetch?: typeof fe
     }
   }
   return results;
+}
+
+export type KeyCheck =
+  | { status: "valid"; label?: string; freeTier?: boolean }
+  | { status: "rejected" }
+  | { status: "unverified" };
+
+/** Asks OpenRouter about a key: rejected (401/403), valid, or unverified when OpenRouter can't be reached. */
+export async function verifyKey(apiKey: string, options: { fetch?: typeof fetch } = {}): Promise<KeyCheck> {
+  try {
+    const response = await (options.fetch ?? fetch)(`${OPENROUTER_API}/key`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (response.status === 401 || response.status === 403) return { status: "rejected" };
+    if (!response.ok) return { status: "unverified" };
+    const data = ((await response.json().catch(() => null)) as { data?: { label?: unknown; is_free_tier?: unknown } } | null)?.data;
+    return {
+      status: "valid",
+      ...(typeof data?.label === "string" && data.label ? { label: data.label } : {}),
+      ...(typeof data?.is_free_tier === "boolean" ? { freeTier: data.is_free_tier } : {}),
+    };
+  } catch (error) {
+    console.error("Could not verify the OpenRouter key", error);
+    return { status: "unverified" };
+  }
 }

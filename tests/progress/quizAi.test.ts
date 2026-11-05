@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AI_REPLY_MAX } from "@/lib/ai-limits";
-import { getAiSettings, saveAiSettings } from "@/lib/aiSettings";
+import { clearAiKey, getAiConfig, getAiSettings, saveAiKey, saveAiSettings } from "@/lib/aiSettings";
 import { connectDb } from "@/lib/db";
 import { DEFAULT_OPENROUTER_MODEL, resetEnvCache } from "@/lib/env";
 import { AiError } from "@/lib/openrouter";
-import { AiConversation, AiUsage, Question } from "@/models";
+import { AiConversation, AiSettings, AiUsage, Question } from "@/models";
 import { createSession } from "@/progress/quiz";
 import { askFollowUp, consumeAiCall, gradeAnswer, loadCoachCard, parseFeedback } from "@/progress/quizAi";
 import { resetDb } from "../setup/mongo";
@@ -74,6 +74,7 @@ describe("quiz coach", () => {
     vi.stubEnv("OPENROUTER_API_KEY", "sk-test");
     vi.stubEnv("OPENROUTER_MODEL", "");
     vi.stubEnv("OPENROUTER_DAILY_LIMIT", "3");
+    vi.stubEnv("AUTH_SECRET", "test-auth-secret");
     resetEnvCache();
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -88,6 +89,8 @@ describe("quiz coach", () => {
     it("defaults to the environment and lets the admin override it", async () => {
       expect(await getAiSettings()).toEqual({
         keyConfigured: true,
+        keySource: "env",
+        keyUnreadable: false,
         enabled: true,
         active: true,
         primaryModel: DEFAULT_OPENROUTER_MODEL,
@@ -111,6 +114,75 @@ describe("quiz coach", () => {
       vi.stubEnv("OPENROUTER_API_KEY", "");
       resetEnvCache();
       expect(await getAiSettings()).toMatchObject({ keyConfigured: false, enabled: true, active: false });
+    });
+
+    describe("API key", () => {
+      const verified = async () => new Response(JSON.stringify({ data: { label: "learn" } }));
+
+      it("saves a verified key encrypted and prefers it over the environment", async () => {
+        const admin = newUserId();
+        expect(await saveAiKey(" sk-or-v1-secret-1234 ", admin, { fetch: verified })).toEqual({
+          ok: true,
+          verified: { status: "valid", label: "learn" },
+        });
+        const row = await AiSettings.findById("ai").lean<{ apiKeyEncrypted: string; apiKeyHint: string }>();
+        expect(row?.apiKeyEncrypted).not.toContain("secret");
+        expect(row?.apiKeyHint).toBe("1234");
+
+        const { settings, apiKey } = await getAiConfig();
+        expect(apiKey).toBe("sk-or-v1-secret-1234");
+        expect(settings).toMatchObject({ keySource: "settings", keyHint: "1234", keyConfigured: true, active: true });
+        expect(JSON.stringify(settings)).not.toContain("secret");
+
+        await clearAiKey(admin);
+        expect(await getAiConfig()).toMatchObject({ apiKey: "sk-test", settings: { keySource: "env" } });
+      });
+
+      it("makes the coach available with no environment key", async () => {
+        vi.stubEnv("OPENROUTER_API_KEY", "");
+        resetEnvCache();
+        expect(await getAiSettings()).toMatchObject({ keySource: "none", active: false });
+        await saveAiKey("sk-or-v1-only-here", newUserId(), { fetch: verified });
+        expect(await getAiSettings()).toMatchObject({ keySource: "settings", active: true });
+      });
+
+      it("does not save a key OpenRouter rejects, but saves one it cannot verify", async () => {
+        const admin = newUserId();
+        const rejected = await saveAiKey("sk-or-v1-wrong-key", admin, { fetch: async () => new Response("", { status: 401 }) });
+        expect(rejected).toEqual({ ok: false, error: expect.stringMatching(/rejected/) });
+        expect((await getAiSettings()).keySource).toBe("env");
+
+        const offline = await saveAiKey("sk-or-v1-offline", admin, {
+          fetch: async () => {
+            throw new TypeError("offline");
+          },
+        });
+        expect(offline).toEqual({ ok: true, verified: { status: "unverified" } });
+        expect((await getAiSettings()).keySource).toBe("settings");
+      });
+
+      it("rejects malformed keys and saving without AUTH_SECRET", async () => {
+        const fetch = vi.fn();
+        expect(await saveAiKey("short", newUserId(), { fetch })).toMatchObject({ ok: false });
+        expect(await saveAiKey("sk-or with spaces in", newUserId(), { fetch })).toMatchObject({ ok: false });
+        vi.stubEnv("AUTH_SECRET", "");
+        resetEnvCache();
+        expect(await saveAiKey("sk-or-v1-fine-key", newUserId(), { fetch })).toEqual({
+          ok: false,
+          error: expect.stringMatching(/AUTH_SECRET/),
+        });
+        expect(fetch).not.toHaveBeenCalled();
+      });
+
+      it("reports a saved key it cannot decrypt and falls back to the environment", async () => {
+        await saveAiKey("sk-or-v1-old-secret", newUserId(), { fetch: verified });
+        vi.stubEnv("AUTH_SECRET", "rotated");
+        resetEnvCache();
+        expect(await getAiConfig()).toMatchObject({
+          apiKey: "sk-test",
+          settings: { keySource: "env", keyUnreadable: true },
+        });
+      });
     });
 
     it("rejects bad model ids, a backup equal to the primary and a bad limit", async () => {

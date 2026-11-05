@@ -2,7 +2,7 @@ import { isValidObjectId, type Types } from "mongoose";
 import { z } from "zod";
 import { visibleQuestionFilter } from "@/content/visibility";
 import { AI_ANSWER_MAX, AI_HISTORY_MAX, AI_MESSAGE_MAX, AI_REPLY_MAX, AI_STORED_MAX } from "@/lib/ai-limits";
-import { type AiSettingsView, getAiSettings, modelChain } from "@/lib/aiSettings";
+import { type AiSettingsView, getAiConfig, modelChain } from "@/lib/aiSettings";
 import { retryOnDuplicateKey } from "@/lib/db";
 import { AiError, type ChatMessage, type ChatOptions, chatCompletion, extractJson } from "@/lib/openrouter";
 import { AiConversation, AiUsage, Question, QuizSession } from "@/models";
@@ -180,7 +180,7 @@ export async function gradeAnswer(
 ): Promise<AiGrade> {
   const answer = learnerAnswer.trim().slice(0, AI_ANSWER_MAX);
   if (!answer) throw new AiError("Type an answer first.");
-  const [card, settings] = await Promise.all([loadCoachCard(userId, sessionId, questionId), getAiSettings()]);
+  const [card, { settings, apiKey }] = await Promise.all([loadCoachCard(userId, sessionId, questionId), getAiConfig()]);
   if (!card) throw new AiError("This question is no longer available.");
   if (!settings.active) throw new AiError("The AI coach is turned off.");
 
@@ -192,6 +192,7 @@ export async function gradeAnswer(
       ],
       {
         ...options,
+        apiKey,
         models: modelChain(settings),
         maxTokens: 700,
         jsonSchema: { name: "feedback", schema: FEEDBACK_JSON_SCHEMA },
@@ -226,7 +227,7 @@ export async function askFollowUp(
 ): Promise<AiReply> {
   const message = input.message.trim().slice(0, AI_MESSAGE_MAX);
   if (!message) throw new AiError("Type a message first.");
-  const [card, settings] = await Promise.all([loadCoachCard(userId, sessionId, questionId), getAiSettings()]);
+  const [card, { settings, apiKey }] = await Promise.all([loadCoachCard(userId, sessionId, questionId), getAiConfig()]);
   if (!card) throw new AiError("This question is no longer available.");
   if (!settings.active) throw new AiError("The AI coach is turned off.");
 
@@ -257,7 +258,7 @@ export async function askFollowUp(
   ];
 
   const { text: reply, model } = await metered(userId, settings, () =>
-    chatCompletion(messages, { ...options, models: modelChain(settings), maxTokens: 600, temperature: 0.4 }),
+    chatCompletion(messages, { ...options, apiKey, models: modelChain(settings), maxTokens: 600, temperature: 0.4 }),
   );
   const content = reply.slice(0, AI_REPLY_MAX);
   const turns = [
