@@ -1,7 +1,7 @@
-import { BackLink } from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getGraphAdmin, getNodeAdmin, listSubjects } from "@/admin/queries";
 import { NodeForm } from "@/components/admin/NodeForm";
+import { AdminCard, AdminPage } from "@/components/admin/layout";
 import { connectDb } from "@/lib/db";
 
 export default async function EditTopicPage({
@@ -19,19 +19,17 @@ export default async function EditTopicPage({
   if (!graph || !data || data.node.graphId !== graphId) notFound();
 
   return (
-    <section className="grid gap-4">
-      <BackLink href={`/admin/graphs/${graphId}`}>
-        ← {graph.graph.title}
-      </BackLink>
-      <h1 className="text-2xl font-semibold">{data.node.title}</h1>
-      <NodeForm
-        node={data.node}
-        related={data.related}
-        tracks={graph.graph.tracks}
-        siblings={graph.nodes.map((n) => ({ id: n.id, title: n.title }))}
-        subjects={subjects}
-        graphSubjects={graph.graph.subjects}
-      />
-    </section>
+    <AdminPage title={data.node.title} back={{ href: `/admin/graphs/${graphId}`, label: graph.graph.title }}>
+      <AdminCard>
+        <NodeForm
+          node={data.node}
+          related={data.related}
+          tracks={graph.graph.tracks}
+          siblings={graph.nodes.map((n) => ({ id: n.id, title: n.title }))}
+          subjects={subjects}
+          graphSubjects={graph.graph.subjects}
+        />
+      </AdminCard>
+    </AdminPage>
   );
 }

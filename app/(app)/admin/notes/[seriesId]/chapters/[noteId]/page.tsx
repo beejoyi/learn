@@ -1,7 +1,7 @@
-import { BackLink } from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getNoteAdmin, getSeriesAdmin, listSubjects } from "@/admin/queries";
 import { NoteForm } from "@/components/admin/NoteForm";
+import { AdminCard, AdminPage } from "@/components/admin/layout";
 import { connectDb } from "@/lib/db";
 
 export default async function EditChapterPage({
@@ -18,12 +18,10 @@ export default async function EditChapterPage({
   ]);
   if (!series || !note || note.seriesId !== seriesId) notFound();
   return (
-    <section className="grid gap-4">
-      <BackLink href={`/admin/notes/${seriesId}`}>
-        ← {series.series.title}
-      </BackLink>
-      <h1 className="text-2xl font-semibold">{note.title}</h1>
-      <NoteForm note={note} subjects={subjects} />
-    </section>
+    <AdminPage title={note.title} back={{ href: `/admin/notes/${seriesId}`, label: series.series.title }}>
+      <AdminCard>
+        <NoteForm note={note} subjects={subjects} />
+      </AdminCard>
+    </AdminPage>
   );
 }

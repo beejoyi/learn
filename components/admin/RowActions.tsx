@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
 import { moveItemAction, setStatusAction } from "@/app/(app)/admin/actions";
+import { firstError } from "@/admin/result";
 import type { OrderedKind, StatusKind } from "@/admin/service";
+import { useAdminAction } from "@/components/admin/useAdminAction";
 import type { Status } from "@/models/status";
 
 const buttonClass =
@@ -12,17 +12,8 @@ const buttonClass =
 
 /** Up/down and a status select for one row of an admin list. */
 export function RowActions({ kind, id, status, label }: { kind: OrderedKind; id: string; status?: Status; label: string }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  const run = (action: () => Promise<{ ok: boolean; errors?: Record<string, string> }>) =>
-    startTransition(async () => {
-      setError(null);
-      const result = await action();
-      if (!result.ok) setError(Object.values(result.errors ?? {})[0] ?? "Failed");
-      router.refresh();
-    });
+  const { run, pending, errors } = useAdminAction();
+  const error = firstError(errors);
 
   return (
     <span className="flex items-center gap-1">

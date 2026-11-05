@@ -1,7 +1,7 @@
-import { BackLink } from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getBookAdmin, listSubjects } from "@/admin/queries";
 import { QuestionForm } from "@/components/admin/QuestionForm";
+import { AdminCard, AdminPage } from "@/components/admin/layout";
 import { connectDb } from "@/lib/db";
 
 export default async function NewQuestionPage({
@@ -18,23 +18,23 @@ export default async function NewQuestionPage({
   if (!data || !data.book.parts.length) notFound();
 
   return (
-    <section className="grid gap-4">
-      <BackLink href={`/admin/books/${bookId}`}>← {data.book.title}</BackLink>
-      <h1 className="text-2xl font-semibold">New question</h1>
-      <QuestionForm
-        question={{
-          id: "",
-          bookId,
-          partKey: data.book.parts[0].key,
-          question: "",
-          prompt: "",
-          answer: "",
-          subjects: data.book.subjects,
-          status: "draft",
-        }}
-        parts={data.book.parts}
-        subjects={subjects}
-      />
-    </section>
+    <AdminPage title="New question" back={{ href: `/admin/books/${bookId}`, label: data.book.title }}>
+      <AdminCard>
+        <QuestionForm
+          question={{
+            id: "",
+            bookId,
+            partKey: data.book.parts[0].key,
+            question: "",
+            prompt: "",
+            answer: "",
+            subjects: data.book.subjects,
+            status: "draft",
+          }}
+          parts={data.book.parts}
+          subjects={subjects}
+        />
+      </AdminCard>
+    </AdminPage>
   );
 }

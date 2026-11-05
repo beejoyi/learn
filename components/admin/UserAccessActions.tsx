@@ -1,8 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { createContext, useContext, useId, useState, useTransition } from "react";
+import { createContext, useContext, useId, useState } from "react";
 import { setUserAccessAction } from "@/app/(app)/admin/users/actions";
+import { firstError } from "@/admin/result";
+import { useAdminAction } from "@/components/admin/useAdminAction";
 import { Button } from "@/components/ui/button";
 import { BLOCK_REASON_MAX as REASON_MAX } from "@/lib/access-limits";
 import { cn } from "@/lib/utils";
@@ -53,38 +54,38 @@ export function UserAccessActions({
   email: string;
   status: "pending" | "approved" | "blocked";
 }) {
-  const router = useRouter();
   const setFlash = useContext(FlashContext);
-  const [pending, startTransition] = useTransition();
+  const { run: runAction, pending, errors } = useAdminAction();
   const [blocking, setBlocking] = useState(false);
   const [reason, setReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const reasonId = useId();
   const tooLong = reason.trim().length > REASON_MAX;
 
+  const error = firstError(errors) ?? null;
+
   const run = (next: "approved" | "blocked") =>
-    startTransition(async () => {
-      setError(null);
-      const result = await setUserAccessAction(id, next, next === "blocked" ? reason : undefined);
-      if (!result.ok) {
-        const message = Object.values(result.errors)[0] ?? "Something went wrong. Try again.";
-        setError(message);
-        setFlash({ tone: "error", text: `${email}: ${message}` });
-        return;
-      }
-      setBlocking(false);
-      setReason("");
-      setFlash({
-        tone: "ok",
-        text:
-          next === "approved"
-            ? status === "blocked"
-              ? `${email} is unblocked and can use Learn again.`
-              : `${email} is approved and can now use Learn.`
-            : `${email} is blocked and has lost access.`,
-      });
-      router.refresh();
-    });
+    runAction(
+      async () => {
+        const result = await setUserAccessAction(id, next, next === "blocked" ? reason : undefined);
+        if (!result.ok) setFlash({ tone: "error", text: `${email}: ${firstError(result.errors) ?? "Something went wrong. Try again."}` });
+        return result;
+      },
+      {
+        onSuccess: () => {
+          setBlocking(false);
+          setReason("");
+          setFlash({
+            tone: "ok",
+            text:
+              next === "approved"
+                ? status === "blocked"
+                  ? `${email} is unblocked and can use Learn again.`
+                  : `${email} is approved and can now use Learn.`
+                : `${email} is blocked and has lost access.`,
+          });
+        },
+      },
+    );
 
   if (blocking) {
     return (

@@ -1,6 +1,6 @@
-import { BackLink } from "@/components/BackLink";
 import { listRevisionsAdmin } from "@/admin/queries";
 import { RestoreButton } from "@/components/admin/RestoreButton";
+import { AdminPage, EmptyState } from "@/components/admin/layout";
 import { connectDb } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
 
@@ -14,16 +14,16 @@ export default async function EntityHistoryPage({
   const revisions = await listRevisionsAdmin({ entityType, entityId }, 200);
 
   return (
-    <section className="grid gap-4">
-      <BackLink href="/admin/revisions">← Revisions</BackLink>
-      <h1 className="text-2xl font-semibold">
-        History · {entityType}{" "}
-        <span className="font-mono text-base text-muted-foreground">
-          {entityId}
-        </span>
-      </h1>
+    <AdminPage
+      back={{ href: "/admin/revisions", label: "Revisions" }}
+      title={
+        <>
+          History · {entityType} <span className="font-mono text-base text-muted-foreground">{entityId}</span>
+        </>
+      }
+    >
       {revisions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No earlier versions.</p>
+        <EmptyState>No earlier versions.</EmptyState>
       ) : (
         <ol className="grid gap-3">
           {revisions.map((r) => (
@@ -51,6 +51,6 @@ export default async function EntityHistoryPage({
           ))}
         </ol>
       )}
-    </section>
+    </AdminPage>
   );
 }

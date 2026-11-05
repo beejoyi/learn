@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { clearAiKeyAction, saveAiKeyAction } from "@/app/(app)/admin/ai/actions";
-import { inputClass } from "@/components/admin/SaveBar";
+import { ActionStatus, inputClass } from "@/components/admin/SaveBar";
+import { useAdminAction } from "@/components/admin/useAdminAction";
 import { Button } from "@/components/ui/button";
 import type { AiKeySource } from "@/lib/aiSettings";
 
@@ -24,36 +24,28 @@ export function AiKeyForm({
   updatedAt?: string;
   unreadable: boolean;
 }) {
-  const router = useRouter();
   const [key, setKey] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [pending, startTransition] = useTransition();
+  const [savedText, setSavedText] = useState("Saved.");
+  const { run, pending, errors, saved, touch } = useAdminAction();
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
-    startTransition(async () => {
-      setError("");
-      setNotice("");
-      const result = await saveAiKeyAction(key);
-      if (!result.ok) return setError(result.error);
-      setKey("");
-      const v = result.verified;
-      setNotice(
-        v.status === "valid"
-          ? `Key saved and verified${v.label ? ` (${v.label})` : ""}${v.freeTier ? ". It is on OpenRouter's free tier." : "."}`
-          : "Key saved, but OpenRouter could not be reached to verify it. Use Test models below to check.",
-      );
-      router.refresh();
+    run(() => saveAiKeyAction(key), {
+      onSuccess: ({ verified: v }) => {
+        setKey("");
+        setSavedText(
+          v.status === "valid"
+            ? `Key saved and verified${v.label ? ` (${v.label})` : ""}${v.freeTier ? ". It is on OpenRouter's free tier." : "."}`
+            : "Key saved, but OpenRouter could not be reached to verify it. Use Test models below to check.",
+        );
+      },
     });
   };
 
   const remove = () =>
-    startTransition(async () => {
-      setError("");
-      await clearAiKeyAction();
-      setNotice(source === "settings" ? "Saved key removed." : "");
-      router.refresh();
+    run(() => clearAiKeyAction(), {
+      confirm: "Remove the saved key? The coach falls back to OPENROUTER_API_KEY, or turns off without it.",
+      onSuccess: () => setSavedText("Saved key removed."),
     });
 
   const status =
@@ -78,8 +70,7 @@ export function AiKeyForm({
     );
 
   return (
-    <form onSubmit={save} className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:p-5" aria-label="OpenRouter API key">
-      <h2 className="font-medium">OpenRouter API key</h2>
+    <form onSubmit={save} className="grid gap-3" aria-label="OpenRouter API key">
       <p className="text-sm">{status}</p>
       {unreadable && (
         <p role="alert" className="text-sm text-destructive">
@@ -96,7 +87,10 @@ export function AiKeyForm({
           maxLength={API_KEY_MAX}
           className={`${inputClass} min-w-0 flex-1 basis-64 font-mono`}
           value={key}
-          onChange={(e) => setKey(e.target.value)}
+          onChange={(e) => {
+            touch();
+            setKey(e.target.value);
+          }}
         />
         <Button type="submit" disabled={pending || !key.trim()}>
           {pending ? "Checking…" : "Save key"}
@@ -110,16 +104,7 @@ export function AiKeyForm({
       <p className="text-xs text-muted-foreground">
         Stored encrypted with AUTH_SECRET and never shown again. Changing AUTH_SECRET means entering it again.
       </p>
-      {notice && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {notice}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <ActionStatus saved={saved} errors={errors} savedText={savedText} />
     </form>
   );
 }

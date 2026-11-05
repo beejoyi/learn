@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listGraphsAdmin } from "@/admin/queries";
+import { AdminList, AdminListItem, AdminPage } from "@/components/admin/layout";
 import { RowActions } from "@/components/admin/RowActions";
 import { buttonVariants } from "@/components/ui/button";
 import { connectDb } from "@/lib/db";
@@ -15,47 +16,27 @@ export default async function AdminGraphsPage() {
   await connectDb();
   const graphs = await listGraphsAdmin();
   return (
-    <section className="grid gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Graphs</h1>
-        <Link
-          href="/admin/graphs/new"
-          className={buttonVariants({ size: "sm" })}
-        >
+    <AdminPage
+      title="Graphs"
+      actions={
+        <Link href="/admin/graphs/new" className={buttonVariants({ size: "sm" })}>
           New graph
         </Link>
-      </div>
-      <ul className="divide-y divide-border rounded-xl border border-border bg-card">
-        {graphs.length === 0 && (
-          <li className="px-4 py-2 text-sm text-muted-foreground">
-            No graphs yet.
-          </li>
-        )}
-        {graphs.map((g) => (
-          <li
-            key={g.id}
-            className="flex flex-wrap items-center justify-between gap-3 px-4 py-2"
+      }
+    >
+      <AdminList empty="No graphs yet.">
+        {graphs.map((item) => (
+          <AdminListItem
+            key={item.id}
+            actions={<RowActions kind="graph" id={item.id} status={item.status} label={item.title} />}
           >
-            <span>
-              <Link
-                href={`/admin/graphs/${g.id}`}
-                className="font-medium hover:underline"
-              >
-                {g.title}
-              </Link>
-              <span className="ml-2 text-xs text-muted-foreground">
-                {g.slug} · {g.topics} topics
-              </span>
-            </span>
-            <RowActions
-              kind="graph"
-              id={g.id}
-              status={g.status}
-              label={g.title}
-            />
-          </li>
+            <Link href={`/admin/graphs/${item.id}`} className="font-medium hover:underline">
+              {item.title}
+            </Link>
+            <span className="ml-2 text-xs text-muted-foreground">{item.slug} · {item.topics} topics</span>
+          </AdminListItem>
         ))}
-      </ul>
-    </section>
+      </AdminList>
+    </AdminPage>
   );
 }

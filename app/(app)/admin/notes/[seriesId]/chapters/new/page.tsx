@@ -1,7 +1,7 @@
-import { BackLink } from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getSeriesAdmin, listSubjects } from "@/admin/queries";
 import { NoteForm } from "@/components/admin/NoteForm";
+import { AdminCard, AdminPage } from "@/components/admin/layout";
 import { connectDb } from "@/lib/db";
 
 export default async function NewChapterPage({
@@ -17,23 +17,21 @@ export default async function NewChapterPage({
   ]);
   if (!data) notFound();
   return (
-    <section className="grid gap-4">
-      <BackLink href={`/admin/notes/${seriesId}`}>
-        ← {data.series.title}
-      </BackLink>
-      <h1 className="text-2xl font-semibold">New chapter</h1>
-      <NoteForm
-        note={{
-          id: "",
-          seriesId,
-          slug: "",
-          title: "",
-          body: "",
-          subjects: data.series.subjects,
-          status: "draft",
-        }}
-        subjects={subjects}
-      />
-    </section>
+    <AdminPage title="New chapter" back={{ href: `/admin/notes/${seriesId}`, label: data.series.title }}>
+      <AdminCard>
+        <NoteForm
+          note={{
+            id: "",
+            seriesId,
+            slug: "",
+            title: "",
+            body: "",
+            subjects: data.series.subjects,
+            status: "draft",
+          }}
+          subjects={subjects}
+        />
+      </AdminCard>
+    </AdminPage>
   );
 }

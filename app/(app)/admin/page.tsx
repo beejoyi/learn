@@ -1,17 +1,11 @@
 import Link from "next/link";
+import { ADMIN_NAV } from "@/admin/nav";
+import { AdminCard, AdminPage } from "@/components/admin/layout";
+import { getAiSettings } from "@/lib/aiSettings";
 import { connectDb } from "@/lib/db";
 import { getEnv } from "@/lib/env";
-import { getAiSettings } from "@/lib/aiSettings";
-import {
-  Graph,
-  GraphNode,
-  Note,
-  NoteSeries,
-  Question,
-  QuestionBook,
-  User,
-} from "@/models";
 import { buildMetadata } from "@/lib/seo";
+import { ApiToken, Graph, GraphNode, Note, NoteSeries, Question, QuestionBook, Subject, User } from "@/models";
 
 export const metadata = buildMetadata({
   title: "Admin",
@@ -21,67 +15,55 @@ export const metadata = buildMetadata({
 
 export default async function AdminHome() {
   await connectDb();
-  const [books, questions, graphs, topics, series, notes, users, pendingUsers, ai] =
-    await Promise.all([
-      QuestionBook.countDocuments(),
-      Question.countDocuments(),
-      Graph.countDocuments(),
-      GraphNode.countDocuments(),
-      NoteSeries.countDocuments(),
-      Note.countDocuments(),
-      User.countDocuments(),
-      // Admins are always approved whatever their stored status, as on the users page.
-      User.countDocuments({ status: "pending", email: { $nin: getEnv().ADMIN_EMAILS } }),
-      getAiSettings(),
-    ]);
-  const rows = [
-    {
-      href: "/admin/books",
-      label: "Question books",
-      detail: `${books} books · ${questions} questions`,
-    },
-    {
-      href: "/admin/graphs",
-      label: "Graphs",
-      detail: `${graphs} graphs · ${topics} topics`,
-    },
-    {
-      href: "/admin/notes",
-      label: "Note series",
-      detail: `${series} series · ${notes} chapters`,
-    },
-    {
-      href: pendingUsers > 0 ? "/admin/users?status=pending" : "/admin/users",
-      label: "Users",
-      detail: `${users} signed up${pendingUsers > 0 ? ` · ${pendingUsers} waiting for review` : ""}`,
-    },
-    {
-      href: "/admin/ai",
-      label: "AI coach",
-      detail: !ai.keyConfigured
-        ? "Off · no OpenRouter key"
-        : ai.enabled
-          ? `On · ${ai.primaryModel}${ai.fallbackModel ? ` (backup ${ai.fallbackModel})` : ""}`
-          : "Turned off",
-    },
-  ];
+  const [books, questions, graphs, topics, series, notes, subjects, users, pendingUsers, tokens, ai] = await Promise.all([
+    QuestionBook.countDocuments(),
+    Question.countDocuments(),
+    Graph.countDocuments(),
+    GraphNode.countDocuments(),
+    NoteSeries.countDocuments(),
+    Note.countDocuments(),
+    Subject.countDocuments(),
+    User.countDocuments(),
+    // Admins are always approved whatever their stored status, as on the users page.
+    User.countDocuments({ status: "pending", email: { $nin: getEnv().ADMIN_EMAILS } }),
+    ApiToken.countDocuments({ revokedAt: null }),
+    getAiSettings(),
+  ]);
+
+  // Live detail per section; sections without one show their description.
+  const detail: Record<string, string> = {
+    "/admin/books": `${books} books · ${questions} questions`,
+    "/admin/graphs": `${graphs} graphs · ${topics} topics`,
+    "/admin/notes": `${series} series · ${notes} chapters`,
+    "/admin/subjects": `${subjects} subjects`,
+    "/admin/users": `${users} signed up${pendingUsers > 0 ? ` · ${pendingUsers} waiting for review` : ""}`,
+    "/admin/tokens": `${tokens} active`,
+    "/admin/ai": !ai.keyConfigured
+      ? "Off · no OpenRouter key"
+      : ai.enabled
+        ? `On · ${ai.primaryModel}${ai.fallbackModel ? ` (backup ${ai.fallbackModel})` : ""}`
+        : "Turned off",
+  };
+  const hrefOf = (href: string) => (href === "/admin/users" && pendingUsers > 0 ? "/admin/users?status=pending" : href);
 
   return (
-    <section className="grid gap-4">
-      <h1 className="text-2xl font-semibold">Admin</h1>
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {rows.map((r) => (
-          <li
-            key={r.href}
-            className="rounded-xl border border-border bg-card p-4"
-          >
-            <Link href={r.href} className="font-medium hover:underline">
-              {r.label}
-            </Link>
-            <p className="text-sm text-muted-foreground">{r.detail}</p>
-          </li>
+    <AdminPage title="Admin">
+      <div className="grid gap-4 lg:grid-cols-2">
+        {ADMIN_NAV.map((group) => (
+          <AdminCard key={group.label} title={group.label}>
+            <ul className="grid gap-3">
+              {group.links.map((l) => (
+                <li key={l.href} className="grid">
+                  <Link href={hrefOf(l.href)} className="font-medium hover:underline">
+                    {l.label}
+                  </Link>
+                  <span className="text-sm text-muted-foreground">{detail[l.href] ?? l.description}</span>
+                </li>
+              ))}
+            </ul>
+          </AdminCard>
         ))}
-      </ul>
-    </section>
+      </div>
+    </AdminPage>
   );
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { type ActionResult, fail, ok } from "@/admin/result";
 import { MODEL_ID_MAX, MODEL_ID_PATTERN } from "@/lib/ai-limits";
 import { getEnv } from "@/lib/env";
 import { type KeyCheck, verifyKey } from "@/lib/openrouter";
@@ -96,18 +97,15 @@ export const aiSettingsInput = z
 
 export type AiSettingsInput = z.input<typeof aiSettingsInput>;
 
-export async function saveAiSettings(
-  input: AiSettingsInput,
-  userId: string,
-): Promise<{ ok: true } | { ok: false; errors: Record<string, string> }> {
+export async function saveAiSettings(input: AiSettingsInput, userId: string): Promise<ActionResult> {
   const parsed = aiSettingsInput.safeParse(input);
   if (!parsed.success) {
     const errors: Record<string, string> = {};
     for (const issue of parsed.error.issues) errors[String(issue.path[0] ?? "_")] ??= issue.message;
-    return { ok: false, errors };
+    return fail(errors);
   }
   await AiSettings.updateOne({ _id: "ai" }, { $set: { ...parsed.data, updatedBy: userId } }, { upsert: true });
-  return { ok: true };
+  return ok();
 }
 
 export const API_KEY_MAX = 300;
@@ -118,9 +116,7 @@ const apiKeyInput = z
   .max(API_KEY_MAX, "That does not look like an OpenRouter key")
   .regex(/^\S+$/, "Keys contain no spaces");
 
-export type SaveKeyResult =
-  | { ok: true; verified: Exclude<KeyCheck, { status: "rejected" }> }
-  | { ok: false; error: string };
+export type SaveKeyResult = ActionResult<{ verified: Exclude<KeyCheck, { status: "rejected" }> }>;
 
 /**
  * Checks a key with OpenRouter and stores it encrypted; it then overrides OPENROUTER_API_KEY.
@@ -132,12 +128,12 @@ export async function saveAiKey(
   options: { fetch?: typeof fetch } = {},
 ): Promise<SaveKeyResult> {
   const parsed = apiKeyInput.safeParse(key);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return fail(parsed.error.issues[0].message);
   const secret = getEnv().AUTH_SECRET;
-  if (!secret) return { ok: false, error: "Set AUTH_SECRET first: saved keys are encrypted with it." };
+  if (!secret) return fail("Set AUTH_SECRET first: saved keys are encrypted with it.");
 
   const verified = await verifyKey(parsed.data, options);
-  if (verified.status === "rejected") return { ok: false, error: "OpenRouter rejected this key. Check it and try again." };
+  if (verified.status === "rejected") return fail("OpenRouter rejected this key. Check it and try again.");
 
   await AiSettings.updateOne(
     { _id: "ai" },
@@ -151,7 +147,7 @@ export async function saveAiKey(
     },
     { upsert: true },
   );
-  return { ok: true, verified };
+  return ok({ verified });
 }
 
 /** Forgets the saved key; OPENROUTER_API_KEY (if any) applies again. */

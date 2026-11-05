@@ -1,11 +1,10 @@
 "use server";
 
+import { adminContext } from "@/admin/action";
 import { z } from "zod";
 import { runImport } from "@/content/import/run";
 import { importFields } from "@/content/import/schema";
 import type { ImportReport } from "@/content/types";
-import { requireAdmin } from "@/lib/authz";
-import { connectDb } from "@/lib/db";
 import { issuesMessage } from "@/lib/zod";
 
 const input = z.object({ ...importFields, publish: z.boolean() });
@@ -15,12 +14,11 @@ async function run(
   raw: ImportInput,
   dryRun: boolean,
 ): Promise<ImportReport | { error: string }> {
-  const user = await requireAdmin();
+  const user = await adminContext();
   const parsed = input.safeParse(raw);
   if (!parsed.success) return { error: issuesMessage(parsed.error) };
   if (parsed.data.source.kind !== parsed.data.target.kind)
     return { error: "The source does not match the target kind" };
-  await connectDb();
   return runImport({
     ...parsed.data,
     title: parsed.data.title || undefined,

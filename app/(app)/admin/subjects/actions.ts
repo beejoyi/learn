@@ -1,11 +1,9 @@
 "use server";
 
+import { adminContext } from "@/admin/action";
 import { saveSubject, type Result, type SubjectInput } from "@/admin/service";
-import { requireAdmin } from "@/lib/authz";
-import { connectDb } from "@/lib/db";
 
 export async function saveSubjectAction(input: SubjectInput): Promise<Result> {
-  const user = await requireAdmin();
-  await connectDb();
+  const user = await adminContext();
   return saveSubject(input, user.email);
 }

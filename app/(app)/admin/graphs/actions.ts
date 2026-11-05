@@ -1,5 +1,6 @@
 "use server";
 
+import { adminContext } from "@/admin/action";
 import { searchNotes, searchQuestions } from "@/admin/queries";
 import {
   saveGraph,
@@ -10,18 +11,14 @@ import {
   type NodeInput,
   type Result,
 } from "@/admin/service";
-import { requireAdmin } from "@/lib/authz";
-import { connectDb } from "@/lib/db";
 
 export async function saveGraphAction(input: GraphInput): Promise<Result> {
-  const user = await requireAdmin();
-  await connectDb();
+  const user = await adminContext();
   return saveGraph(input, user.email);
 }
 
 export async function saveNodeAction(input: NodeInput): Promise<Result> {
-  const user = await requireAdmin();
-  await connectDb();
+  const user = await adminContext();
   return saveNode(input, user.email);
 }
 
@@ -30,8 +27,7 @@ export async function setNodeQuestionLinkAction(
   questionId: string,
   linked: boolean,
 ): Promise<Result> {
-  const user = await requireAdmin();
-  await connectDb();
+  const user = await adminContext();
   return setQuestionTopicLink(questionId, nodeId, Boolean(linked), user.email);
 }
 
@@ -41,8 +37,7 @@ export async function setNodeNoteLinkAction(
   anchor: string,
   linked: boolean,
 ): Promise<Result> {
-  const user = await requireAdmin();
-  await connectDb();
+  const user = await adminContext();
   return setNodeNoteLink(
     nodeId,
     noteId,
@@ -56,8 +51,7 @@ export async function searchQuestionsAction(
   query: string,
   subjects: string[],
 ): Promise<{ id: string; title: string }[]> {
-  await requireAdmin();
-  await connectDb();
+  await adminContext();
   return searchQuestions(
     String(query ?? "").slice(0, 100),
     Array.isArray(subjects) ? subjects.map(String).slice(0, 50) : [],
@@ -69,7 +63,6 @@ export async function searchNotesAction(
 ): Promise<
   { id: string; title: string; toc: { anchor: string; text: string }[] }[]
 > {
-  await requireAdmin();
-  await connectDb();
+  await adminContext();
   return searchNotes(String(query ?? "").slice(0, 100));
 }

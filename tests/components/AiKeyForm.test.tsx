@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { saveAiKeyAction, clearAiKeyAction, refresh } = vi.hoisted(() => ({
   saveAiKeyAction: vi.fn(),
-  clearAiKeyAction: vi.fn(async () => {}),
+  clearAiKeyAction: vi.fn(async () => ({ ok: true as const })),
   refresh: vi.fn(),
 }));
 vi.mock("@/app/(app)/admin/ai/actions", () => ({ saveAiKeyAction, clearAiKeyAction }));
@@ -16,6 +16,7 @@ import { AiKeyForm } from "@/components/admin/AiKeyForm";
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("AiKeyForm", () => {
@@ -47,7 +48,7 @@ describe("AiKeyForm", () => {
   });
 
   it("shows a rejection and keeps the typed key", async () => {
-    saveAiKeyAction.mockResolvedValue({ ok: false, error: "OpenRouter rejected this key." });
+    saveAiKeyAction.mockResolvedValue({ ok: false, errors: { _: "OpenRouter rejected this key." } });
     render(<AiKeyForm source="env" unreadable={false} />);
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("New OpenRouter API key"), "sk-or-bad-key");
@@ -56,9 +57,14 @@ describe("AiKeyForm", () => {
     expect((screen.getByLabelText("New OpenRouter API key") as HTMLInputElement).value).toBe("sk-or-bad-key");
   });
 
-  it("removes the saved key", async () => {
+  it("asks before removing the saved key, then removes it", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     render(<AiKeyForm source="settings" hint="abcd" unreadable={false} />);
-    await userEvent.setup().click(screen.getByRole("button", { name: "Remove saved key" }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Remove saved key" }));
+    expect(clearAiKeyAction).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Remove saved key" }));
+    expect(confirm).toHaveBeenCalledTimes(2);
     expect(clearAiKeyAction).toHaveBeenCalled();
     expect(await screen.findByText("Saved key removed.")).toBeTruthy();
   });

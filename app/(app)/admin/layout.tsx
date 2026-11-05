@@ -1,29 +1,7 @@
 import { notFound } from "next/navigation";
-import { AdminNav, type AdminNavGroup } from "@/components/admin/AdminNav";
+import { ADMIN_NAV } from "@/admin/nav";
+import { AdminNav } from "@/components/admin/AdminNav";
 import { ForbiddenError, requireAdmin } from "@/lib/authz";
-
-const NAV: AdminNavGroup[] = [
-  {
-    label: "Content",
-    links: [
-      { href: "/admin/books", label: "Question books" },
-      { href: "/admin/graphs", label: "Graphs" },
-      { href: "/admin/notes", label: "Note series" },
-      { href: "/admin/subjects", label: "Subjects" },
-    ],
-  },
-  {
-    label: "System",
-    links: [
-      { href: "/admin/import", label: "Import markdown" },
-      { href: "/admin/revisions", label: "Revisions" },
-      { href: "/admin/export", label: "Export" },
-      { href: "/admin/tokens", label: "API tokens" },
-      { href: "/admin/users", label: "Users" },
-      { href: "/admin/ai", label: "AI coach" },
-    ],
-  },
-];
 
 export default async function AdminLayout({
   children,
@@ -40,7 +18,7 @@ export default async function AdminLayout({
 
   return (
     <div className="grid gap-6 md:grid-cols-[12.5rem_minmax(0,1fr)]">
-      <AdminNav groups={NAV} />
+      <AdminNav groups={ADMIN_NAV} />
       <div className="min-w-0">{children}</div>
     </div>
   );

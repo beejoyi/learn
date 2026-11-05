@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import { saveAiSettingsAction, testAiModelsAction } from "@/app/(app)/admin/ai/actions";
 import { Field } from "@/components/admin/fields";
 import { SaveBar, inputClass } from "@/components/admin/SaveBar";
+import { useAdminAction } from "@/components/admin/useAdminAction";
 import { Button } from "@/components/ui/button";
 import { MODEL_ID_MAX } from "@/lib/ai-limits";
 import type { CatalogModel, ModelCheck } from "@/lib/openrouter";
@@ -130,32 +130,23 @@ export function AiSettingsForm({
   catalog: CatalogModel[];
   catalogError?: string;
 }) {
-  const router = useRouter();
   const [draft, setDraft] = useState(initial);
   const [limitText, setLimitText] = useState(String(initial.dailyLimit));
   const [showPaid, setShowPaid] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const { run, pending, errors, saved, touch } = useAdminAction();
   const [checks, setChecks] = useState<ModelCheck[] | null>(null);
   const [testing, startTesting] = useTransition();
   const freeCount = catalog.filter((m) => m.free).length;
 
   const set = <K extends keyof AiSettingsDraft>(key: K, value: AiSettingsDraft[K]) => {
-    setSaved(false);
+    touch();
     setDraft((d) => ({ ...d, [key]: value }));
   };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    startTransition(async () => {
-      const dailyLimit = limitText.trim() === "" ? Number.NaN : Number(limitText);
-      const result = await saveAiSettingsAction({ ...draft, dailyLimit });
-      if (!result.ok) return setErrors(result.errors);
-      setErrors({});
-      setSaved(true);
-      router.refresh();
-    });
+    const dailyLimit = limitText.trim() === "" ? Number.NaN : Number(limitText);
+    run(() => saveAiSettingsAction({ ...draft, dailyLimit }));
   };
 
   const models = [draft.primaryModel, draft.fallbackModel].filter(Boolean);
@@ -170,7 +161,7 @@ export function AiSettingsForm({
     });
 
   return (
-    <form onSubmit={submit} className="grid gap-5 rounded-xl border border-border bg-card p-4 sm:p-5">
+    <form onSubmit={submit} className="grid gap-5" aria-label="Models and limits">
       <label className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"
@@ -225,7 +216,7 @@ export function AiSettingsForm({
           className={`${inputClass} max-w-40`}
           value={limitText}
           onChange={(e) => {
-            setSaved(false);
+            touch();
             setLimitText(e.target.value);
           }}
         />

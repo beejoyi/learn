@@ -1,16 +1,16 @@
-import { BackLink } from "@/components/BackLink";
 import { listSubjects } from "@/admin/queries";
 import { GraphForm } from "@/components/admin/GraphForm";
+import { AdminCard, AdminPage } from "@/components/admin/layout";
 import { connectDb } from "@/lib/db";
 
 export default async function NewGraphPage() {
   await connectDb();
   const subjects = await listSubjects();
   return (
-    <section className="grid gap-4">
-      <BackLink href="/admin/graphs">← Graphs</BackLink>
-      <h1 className="text-2xl font-semibold">New graph</h1>
-      <GraphForm subjects={subjects} />
-    </section>
+    <AdminPage title="New graph" back={{ href: "/admin/graphs", label: "Graphs" }}>
+      <AdminCard>
+        <GraphForm subjects={subjects} />
+      </AdminCard>
+    </AdminPage>
   );
 }

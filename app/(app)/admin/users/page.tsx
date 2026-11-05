@@ -6,6 +6,7 @@ import { inputClass } from "@/components/admin/SaveBar";
 import { Button } from "@/components/ui/button";
 import { connectDb } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
+import { AdminList, AdminPage } from "@/components/admin/layout";
 import { buildMetadata } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
@@ -64,14 +65,15 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
   const href = (next: Tab) => `/admin/users?${new URLSearchParams({ status: next, ...(q ? { q } : {}) })}`;
 
   return (
-    <section className="grid gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Users</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <AdminPage
+      title="Users"
+      description={
+        <>
           New sign-ins wait here until you approve them. Blocked users lose access on their next request. Admins
           (from <code className="font-mono text-xs">ADMIN_EMAILS</code>) always have access.
-        </p>
-      </div>
+        </>
+      }
+    >
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <nav aria-label="Filter users by status" className="flex flex-wrap gap-1 rounded-lg border border-border bg-card p-1">
@@ -118,19 +120,13 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
       </div>
 
       <UserAccessFlash>
-        {shown.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            {q ? `No ${tab === "all" ? "" : `${tab} `}users match “${q}”.` : EMPTY[tab]}
-          </p>
-        ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border bg-card">
-            {shown.map((u) => (
-              <UserRow key={u.id} user={u} />
-            ))}
-          </ul>
-        )}
+        <AdminList empty={q ? `No ${tab === "all" ? "" : `${tab} `}users match “${q}”.` : EMPTY[tab]}>
+          {shown.map((u) => (
+            <UserRow key={u.id} user={u} />
+          ))}
+        </AdminList>
       </UserAccessFlash>
-    </section>
+    </AdminPage>
   );
 }
 

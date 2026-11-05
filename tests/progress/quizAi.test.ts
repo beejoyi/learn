@@ -149,7 +149,7 @@ describe("quiz coach", () => {
       it("does not save a key OpenRouter rejects, but saves one it cannot verify", async () => {
         const admin = newUserId();
         const rejected = await saveAiKey("sk-or-v1-wrong-key", admin, { fetch: async () => new Response("", { status: 401 }) });
-        expect(rejected).toEqual({ ok: false, error: expect.stringMatching(/rejected/) });
+        expect(rejected).toEqual({ ok: false, errors: { _: expect.stringMatching(/rejected/) } });
         expect((await getAiSettings()).keySource).toBe("env");
 
         const offline = await saveAiKey("sk-or-v1-offline", admin, {
@@ -169,7 +169,7 @@ describe("quiz coach", () => {
         resetEnvCache();
         expect(await saveAiKey("sk-or-v1-fine-key", newUserId(), { fetch })).toEqual({
           ok: false,
-          error: expect.stringMatching(/AUTH_SECRET/),
+          errors: { _: expect.stringMatching(/AUTH_SECRET/) },
         });
         expect(fetch).not.toHaveBeenCalled();
       });

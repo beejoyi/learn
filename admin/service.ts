@@ -3,6 +3,7 @@ import { z } from "zod";
 import { findCycle } from "@/content/cycles";
 import { validateNode } from "@/content/parse/graph";
 import { restoreRevision, saveWithRevision } from "@/content/revisions";
+import type { ActionResult } from "@/admin/result";
 import { inTransaction } from "@/lib/db";
 import { importKey, SLUG_PATTERN } from "@/lib/ids";
 import { extractToc, readMinutes } from "@/lib/markdown/toc";
@@ -12,7 +13,8 @@ import { Graph, GraphNode, Note, NoteSeries, Question, QuestionBook, Revision, S
 // Admin write operations. Every function validates its input, writes through
 // saveWithRevision (so edits keep history) and never deletes content.
 
-export type Result = { ok: true; id: string } | { ok: false; errors: Record<string, string> };
+/** What content saves return: the saved item's id, or field errors. */
+export type Result = ActionResult<{ id: string }>;
 
 type Id = Types.ObjectId;
 const fail = (errors: Record<string, string>): Result => ({ ok: false, errors });

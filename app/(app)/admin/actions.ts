@@ -1,5 +1,6 @@
 "use server";
 
+import { adminContext } from "@/admin/action";
 import {
   moveItem,
   setStatus,
@@ -7,8 +8,6 @@ import {
   type Result,
   type StatusKind,
 } from "@/admin/service";
-import { requireAdmin } from "@/lib/authz";
-import { connectDb } from "@/lib/db";
 import type { Status } from "@/models";
 
 export async function moveItemAction(
@@ -16,8 +15,7 @@ export async function moveItemAction(
   id: string,
   dir: "up" | "down",
 ): Promise<Result> {
-  const user = await requireAdmin();
-  await connectDb();
+  const user = await adminContext();
   return moveItem(kind, id, dir, user.email);
 }
 
@@ -26,7 +24,6 @@ export async function setStatusAction(
   id: string,
   status: Status,
 ): Promise<Result> {
-  const user = await requireAdmin();
-  await connectDb();
+  const user = await adminContext();
   return setStatus(kind, id, status, user.email);
 }

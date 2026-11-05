@@ -1,5 +1,6 @@
 "use server";
 
+import { adminContext } from "@/admin/action";
 import {
   saveNote,
   saveSeries,
@@ -7,17 +8,13 @@ import {
   type Result,
   type SeriesInput,
 } from "@/admin/service";
-import { requireAdmin } from "@/lib/authz";
-import { connectDb } from "@/lib/db";
 
 export async function saveSeriesAction(input: SeriesInput): Promise<Result> {
-  const user = await requireAdmin();
-  await connectDb();
+  const user = await adminContext();
   return saveSeries(input, user.email);
 }
 
 export async function saveNoteAction(input: NoteInput): Promise<Result> {
-  const user = await requireAdmin();
-  await connectDb();
+  const user = await adminContext();
   return saveNote(input, user.email);
 }
