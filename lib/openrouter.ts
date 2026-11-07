@@ -41,6 +41,8 @@ async function attempt(model: string, messages: ChatMessage[], options: ChatOpti
     messages,
     max_tokens: options.maxTokens ?? 800,
     temperature: options.temperature ?? 0.2,
+    // Reasoning models spend max_tokens on thinking and can return empty content; keep thinking short.
+    reasoning: { effort: "low" },
     ...(options.jsonSchema
       ? { response_format: { type: "json_schema", json_schema: { ...options.jsonSchema, strict: true } } }
       : {}),
@@ -222,7 +224,7 @@ export async function checkModels(
       await chatCompletion([{ role: "user", content: 'Reply with the JSON object {"ok": true}.' }], {
         ...options,
         models: [model],
-        maxTokens: 50,
+        maxTokens: 1000,
         timeoutMs: 20_000,
         jsonSchema: CHECK_SCHEMA,
         accept: (t) => extractJson(t) !== null,
