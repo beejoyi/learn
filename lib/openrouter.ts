@@ -3,8 +3,18 @@ export const OPENROUTER_URL = `${OPENROUTER_API}/chat/completions`;
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-/** A failure the learner may see as is; details stay in the server log. */
-export class AiError extends Error {}
+/**
+ * A failure the learner may see as is. `detail` carries OpenRouter's own reason (for admins, e.g. the
+ * model test); it is never shown to learners.
+ */
+export class AiError extends Error {
+  constructor(
+    message: string,
+    readonly detail?: string,
+  ) {
+    super(message);
+  }
+}
 
 export type ChatOptions = {
   /** The OpenRouter key in effect (see getAiConfig in lib/aiSettings.ts). */
@@ -30,10 +40,31 @@ class AttemptError extends Error {
   constructor(
     message: string,
     readonly final = false,
+    readonly detail?: string,
   ) {
     super(message);
   }
 }
+
+/** OpenRouter's error message from a failed response body (`{ error: { message, metadata } }`). */
+export function errorDetail(status: number, body: string): string {
+  let reason = "";
+  try {
+    const error = (JSON.parse(body) as { error?: { message?: unknown; metadata?: { raw?: unknown } } }).error;
+    const raw = error?.metadata?.raw;
+    reason = [error?.message, typeof raw === "string" ? raw : undefined]
+      .filter((s): s is string => typeof s === "string" && Boolean(s.trim()))
+      .join(": ");
+  } catch {
+    reason = body.trim();
+  }
+  return `HTTP ${status}${reason ? ` · ${reason.slice(0, 300)}` : ""}`;
+}
+
+const STATUS_MESSAGES: Record<number, string> = {
+  402: "The AI coach is unavailable (the OpenRouter account is out of credits).",
+  429: "The AI coach is busy right now. Try again shortly.",
+};
 
 async function attempt(model: string, messages: ChatMessage[], options: ChatOptions, key: string): Promise<string> {
   const body = {
@@ -58,27 +89,41 @@ async function attempt(model: string, messages: ChatMessage[], options: ChatOpti
     });
   } catch (error) {
     console.error(`OpenRouter request to ${model} failed`, error);
-    throw new AttemptError("The AI coach could not be reached. Try again.");
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    throw new AttemptError("The AI coach could not be reached. Try again.", false, timedOut ? "Timed out" : "Network error");
   }
 
   if (!response.ok) {
-    console.error(`OpenRouter error from ${model}`, response.status, await response.text().catch(() => ""));
-    if (response.status === 401) throw new AttemptError("The AI coach is misconfigured (the OpenRouter key was rejected).", true);
-    throw new AttemptError(
-      response.status === 429 ? "The AI coach is busy right now. Try again shortly." : "The AI coach failed. Try again.",
-    );
+    const body = await response.text().catch(() => "");
+    console.error(`OpenRouter error from ${model}`, response.status, body);
+    const detail = errorDetail(response.status, body);
+    if (response.status === 401)
+      throw new AttemptError("The AI coach is misconfigured (the OpenRouter key was rejected).", true, detail);
+    throw new AttemptError(STATUS_MESSAGES[response.status] ?? "The AI coach failed. Try again.", false, detail);
   }
 
-  const data = (await response.json().catch(() => null)) as { choices?: { message?: { content?: unknown } }[] } | null;
-  const content = data?.choices?.[0]?.message?.content;
+  const data = (await response.json().catch(() => null)) as {
+    error?: { message?: unknown };
+    choices?: { finish_reason?: unknown; message?: { content?: unknown } }[];
+  } | null;
+  const choice = data?.choices?.[0];
+  const content = choice?.message?.content;
   if (typeof content !== "string" || !content.trim()) {
     console.error(`OpenRouter returned no content from ${model}`, JSON.stringify(data)?.slice(0, 500));
-    throw new AttemptError("The AI coach returned an empty reply. Try again.");
+    const reason =
+      typeof data?.error?.message === "string"
+        ? data.error.message.slice(0, 300)
+        : `finish_reason ${String(choice?.finish_reason ?? "unknown")}`;
+    throw new AttemptError("The AI coach returned an empty reply. Try again.", false, `Empty reply (${reason})`);
   }
   const text = content.trim();
   if (options.accept && !options.accept(text)) {
     console.error(`Unusable reply from ${model}`, text.slice(0, 500));
-    throw new AttemptError("The AI coach gave an unreadable reply. Try again.");
+    throw new AttemptError(
+      "The AI coach gave an unreadable reply. Try again.",
+      false,
+      `Reply was not in the expected format (finish_reason ${String(choice?.finish_reason ?? "unknown")}): ${text.slice(0, 120)}`,
+    );
   }
   return text;
 }
@@ -100,7 +145,7 @@ export async function chatCompletion(messages: ChatMessage[], options: ChatOptio
       if (error.final) break;
     }
   }
-  throw new AiError(last?.message ?? "The AI coach failed. Try again.");
+  throw new AiError(last?.message ?? "The AI coach failed. Try again.", last?.detail);
 }
 
 /** The first JSON object in a reply, tolerating code fences and surrounding prose. */
@@ -154,9 +199,12 @@ export function parseCatalog(data: unknown): CatalogModel[] {
   if (!Array.isArray(rows)) return [];
   return (rows as RawModel[])
     .filter((m): m is RawModel & { id: string } => typeof m.id === "string" && Boolean(m.id))
+    // Chat models only: music, image and video generators also list "text" among their outputs but
+    // cannot coach. OpenRouter's own routers (openrouter/auto, openrouter/free) are kept.
     .filter((m) => {
       const out = m.architecture?.output_modalities;
-      return !Array.isArray(out) || out.includes("text");
+      if (!Array.isArray(out) || m.id.startsWith("openrouter/")) return true;
+      return out.includes("text") && out.every((o) => o === "text");
     })
     .map((m) => ({
       id: m.id,
@@ -235,7 +283,8 @@ export async function checkModels(
         model,
         ok: false,
         ms: Date.now() - started,
-        error: error instanceof AiError ? error.message : "Failed",
+        // Admin-only: OpenRouter's own reason (e.g. a data policy that blocks free models) beats a generic message.
+        error: error instanceof AiError ? (error.detail ? `${error.message} (${error.detail})` : error.message) : "Failed",
       });
     }
   }

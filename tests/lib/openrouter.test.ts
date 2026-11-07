@@ -131,6 +131,8 @@ describe("openrouter", () => {
         },
         { id: "a/zero", name: "Ay Zero", pricing: { prompt: "0", completion: "0" } },
         { id: "i/image", name: "Image only", pricing: { prompt: "0", completion: "0" }, architecture: { output_modalities: ["image"] } },
+        { id: "m/music", name: "Music", pricing: { prompt: "0", completion: "0" }, architecture: { output_modalities: ["text", "audio"] } },
+        { id: "p/picture", name: "Picture", pricing: { prompt: "0", completion: "0" }, architecture: { output_modalities: ["image", "text"] } },
         { id: "openrouter/auto", name: "Auto", pricing: { prompt: "-1", completion: "-1" } },
         { name: "no id" },
       ],
@@ -165,7 +167,11 @@ describe("openrouter", () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(reply('{"ok": true}'))
-      .mockResolvedValueOnce(new Response("", { status: 404 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { message: "No endpoints found matching your data policy", code: 404 } }), {
+          status: 404,
+        }),
+      );
     const results = await checkModels(["a/1", "a/2"], { apiKey: "sk-test", fetch });
     expect(JSON.parse(fetch.mock.calls[0][1].body).response_format.type).toBe("json_schema");
     expect(results.map(({ model, ok }) => ({ model, ok }))).toEqual([
@@ -173,6 +179,18 @@ describe("openrouter", () => {
       { model: "a/2", ok: false },
     ]);
     expect(results[1].error).toMatch(/failed/);
+    expect(results[1].error).toMatch(/HTTP 404 · No endpoints found matching your data policy/);
+  });
+
+  it("keeps OpenRouter's reason as detail, not in the learner-facing message", async () => {
+    const fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ error: { message: "Insufficient credits" } }), { status: 402 }),
+    );
+    const error = await chatCompletion(msg, { apiKey: "sk-test", models: ["a/1"], fetch }).catch((e) => e);
+    expect(error).toBeInstanceOf(AiError);
+    expect(error.message).toMatch(/out of credits/);
+    expect(error.message).not.toMatch(/HTTP/);
+    expect(error.detail).toBe("HTTP 402 · Insufficient credits");
   });
 
   it("checkModels fails a model whose reply is not JSON", async () => {
