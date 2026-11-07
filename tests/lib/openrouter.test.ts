@@ -115,8 +115,20 @@ describe("openrouter", () => {
   describe("catalogue", () => {
     const raw = {
       data: [
-        { id: "z/paid", name: "Zed Paid", context_length: 8000, pricing: { prompt: "0.000001", completion: "0.000002" } },
-        { id: "b/model:free", name: "Bee Free", context_length: 131072, pricing: { prompt: "0", completion: "0" } },
+        {
+          id: "z/paid",
+          name: "Zed Paid",
+          context_length: 8000,
+          pricing: { prompt: "0.000001", completion: "0.000002" },
+          supported_parameters: ["temperature"],
+        },
+        {
+          id: "b/model:free",
+          name: "Bee Free",
+          context_length: 131072,
+          pricing: { prompt: "0", completion: "0" },
+          supported_parameters: ["temperature", "response_format"],
+        },
         { id: "a/zero", name: "Ay Zero", pricing: { prompt: "0", completion: "0" } },
         { id: "i/image", name: "Image only", pricing: { prompt: "0", completion: "0" }, architecture: { output_modalities: ["image"] } },
         { id: "openrouter/auto", name: "Auto", pricing: { prompt: "-1", completion: "-1" } },
@@ -126,10 +138,10 @@ describe("openrouter", () => {
 
     it("lists text models with free ones first, sorted by name", () => {
       expect(parseCatalog(raw)).toEqual([
-        { id: "a/zero", name: "Ay Zero", free: true, contextLength: null },
-        { id: "b/model:free", name: "Bee Free", free: true, contextLength: 131072 },
-        { id: "openrouter/auto", name: "Auto", free: false, contextLength: null },
-        { id: "z/paid", name: "Zed Paid", free: false, contextLength: 8000 },
+        { id: "b/model:free", name: "Bee Free", free: true, contextLength: 131072, json: true },
+        { id: "a/zero", name: "Ay Zero", free: true, contextLength: null, json: null },
+        { id: "openrouter/auto", name: "Auto", free: false, contextLength: null, json: null },
+        { id: "z/paid", name: "Zed Paid", free: false, contextLength: 8000, json: false },
       ]);
       expect(parseCatalog(null)).toEqual([]);
     });
@@ -152,13 +164,21 @@ describe("openrouter", () => {
   it("checkModels tries each model on its own and reports the outcome", async () => {
     const fetch = vi
       .fn()
-      .mockResolvedValueOnce(reply("OK"))
+      .mockResolvedValueOnce(reply('{"ok": true}'))
       .mockResolvedValueOnce(new Response("", { status: 404 }));
     const results = await checkModels(["a/1", "a/2"], { apiKey: "sk-test", fetch });
+    expect(JSON.parse(fetch.mock.calls[0][1].body).response_format.type).toBe("json_schema");
     expect(results.map(({ model, ok }) => ({ model, ok }))).toEqual([
       { model: "a/1", ok: true },
       { model: "a/2", ok: false },
     ]);
     expect(results[1].error).toMatch(/failed/);
+  });
+
+  it("checkModels fails a model whose reply is not JSON", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(reply("OK"));
+    const [result] = await checkModels(["a/1"], { apiKey: "sk-test", fetch });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/unreadable/);
   });
 });

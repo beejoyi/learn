@@ -118,6 +118,8 @@ export type CatalogModel = {
   name: string;
   free: boolean;
   contextLength: number | null;
+  /** Accepts a JSON schema reply format; null when the catalogue does not say. */
+  json: boolean | null;
 };
 
 const CATALOG_TTL_MS = 10 * 60 * 1000;
@@ -134,7 +136,13 @@ type RawModel = {
   context_length?: unknown;
   pricing?: { prompt?: unknown; completion?: unknown };
   architecture?: { output_modalities?: unknown };
+  supported_parameters?: unknown;
 };
+
+function supportsJson(params: unknown): boolean | null {
+  if (!Array.isArray(params)) return null;
+  return params.includes("structured_outputs") || params.includes("response_format");
+}
 
 const isZero = (price: unknown) => typeof price === "string" && Number(price) === 0 && price.trim() !== "";
 
@@ -153,8 +161,14 @@ export function parseCatalog(data: unknown): CatalogModel[] {
       name: typeof m.name === "string" && m.name ? m.name : m.id,
       free: m.id.endsWith(":free") || (isZero(m.pricing?.prompt) && isZero(m.pricing?.completion)),
       contextLength: typeof m.context_length === "number" ? m.context_length : null,
+      json: supportsJson(m.supported_parameters),
     }))
-    .sort((a, b) => Number(b.free) - Number(a.free) || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        Number(b.free) - Number(a.free) ||
+        Number(b.json === true) - Number(a.json === true) ||
+        a.name.localeCompare(b.name),
+    );
 }
 
 /** OpenRouter's model catalogue, cached for a few minutes; an empty list with an error when it cannot be read. */
@@ -183,7 +197,20 @@ export async function listCatalog(
 
 export type ModelCheck = { model: string; ok: boolean; ms: number; error?: string };
 
-/** Asks each model for a one-word reply, one at a time (no fallback), and reports how it went. */
+const CHECK_SCHEMA = {
+  name: "check",
+  schema: {
+    type: "object",
+    properties: { ok: { type: "boolean" } },
+    required: ["ok"],
+    additionalProperties: false,
+  },
+};
+
+/**
+ * Asks each model for a JSON reply (the format the answer check needs), one at a time (no fallback),
+ * and reports how it went.
+ */
 export async function checkModels(
   models: string[],
   options: { apiKey: string; fetch?: typeof fetch },
@@ -192,11 +219,13 @@ export async function checkModels(
   for (const model of models) {
     const started = Date.now();
     try {
-      await chatCompletion([{ role: "user", content: "Reply with the single word OK." }], {
+      await chatCompletion([{ role: "user", content: 'Reply with the JSON object {"ok": true}.' }], {
         ...options,
         models: [model],
         maxTokens: 50,
         timeoutMs: 20_000,
+        jsonSchema: CHECK_SCHEMA,
+        accept: (t) => extractJson(t) !== null,
       });
       results.push({ model, ok: true, ms: Date.now() - started });
     } catch (error) {
